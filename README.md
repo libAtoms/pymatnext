@@ -11,11 +11,11 @@ supports single atomic configurations with the
 
 ## Nested Sampling
 
- - Sample on potential energy $`E`$, with or without enthalpy
-   term $`+ P V`$ for fixed pressure and chemical potential term $`- \sum_i \mu_i N_i`$
+ - Sample on potential energy $E$, with or without enthalpy
+   term $+ P V$ for fixed pressure and chemical potential term $- \sum_i \mu_i N_i$
    for variable composition (but constant total number of atoms, i.e. semi-grand-canonical ensemble).
 
- - Output arbitrary sampled quantities, including NS quantity ($`E + \delta_V P V  - \delta_N \sum_i \mu_i N_i`$),
+ - Output arbitrary sampled quantities, including NS quantity ($E + \delta_V P V  - \delta_N \sum_i \mu_i N_i$),
    as well as configuration-type-specific quantities such as cell volume and composition.
 
  - Output sampled configurations, for postprocessed computation at any temperature
@@ -27,8 +27,8 @@ supports single atomic configurations with the
 
 ### Parallelization
 
- - Optionally parallelized with MPI by distributing configurations among $`N_p`$ MPI tasks
-   and walking one configuration per task for a shorter trajectory length $`L' = L / N_p`$.
+ - Optionally parallelized with MPI by distributing configurations among $N_p$ MPI tasks
+   and walking one configuration per task for a shorter trajectory length $L' = L / N_p$.
 
 ## Configurations
 
@@ -51,13 +51,13 @@ Walks consist of blocks of a several steps of a single type (position or cell or
 
 #### Positions
 
- - Positions sampled with Galilean Monte Carlo, i.e. walking in a straight line in $`3 N`$
+ - Positions sampled with Galilean Monte Carlo, i.e. walking in a straight line in $3 N$
    dimensional positions space until energy exceeds NS maximum, then reflecting specularly,
    and accepting or rejecting entire trajectory depending on on final energy.
 
 #### Cell
 
- - Cell shape and size sampled with Monte Carlo moves. Volume may be sampled from a $`V^{N}`$
+ - Cell shape and size sampled with Monte Carlo moves. Volume may be sampled from a $V^{N}$
    prior, which is the correct one for ensemble averages, or with a flat prior, which requires
    reweighting of the sampled configurations during analysis.  
 

@@ -13,22 +13,22 @@ Both can detect that they are running under MPI and parallelize the analysis ove
 ns_analyse -M 100 -D 10 -n 1500 --delta_P_GPa 0.3 --plot 'log(Cvp)' V -- LJ_LAMMPS.NS_samples > analysis.txt
 ```
 
-Run an analysis, computing result starting at $`100~\mathrm{K}`$, every $`10~\mathrm{K}`$, up to $`100 + 10 * 1499 = 15090~\mathrm{K}`$.
-Reweight the samples for a $0.3~\mathrm{GPa}$ higher pressure than the run, and plot $`\log(C_p)`$ and $`V`$ columns.
+Run an analysis, computing result starting at $100~\mathrm{K}$, every $10~\mathrm{K}$, up to $100 + 10 * 1499 = 15090~\mathrm{K}$.
+Reweight the samples for a $0.3~\mathrm{GPa}$ higher pressure than the run, and plot $\log(C_p)$ and $V$ columns.
 The plot will be saved to `LJ_LAMMPS.NS_samples.analysis.pdf`.
 
 ### text output
 
 In addition to a header prefixed by `#`, the redirected standard output will contain information on
 thermodynamic quantities:
-  - $`T`$: temperature
-  - $`\log(Z)`$: partition function
-  - $`F`$ or $`G`$: free energy or enthalpy (if variable V) or grand potential (if variable composition)
-  - $`U`$: internal energy
-  - $`S`$: entropy [NOTE: relative to?]
-  - $`C_v`$ or $`C_p`$: specific heat
-  - $`V`$: cell volume
-  - $`\alpha`$: thermal expansion coefficient
+  - $T$: temperature
+  - $\log(Z)$: partition function
+  - $F$ or $G$: free energy or enthalpy (if variable V) or grand potential (if variable composition)
+  - $U$: internal energy
+  - $S$: entropy [NOTE: relative to?]
+  - $C_v$ or $C_p$: specific heat
+  - $V$: cell volume
+  - $\alpha$: thermal expansion coefficient
   - `K-S(V)` Komogorov-Smirnoff non-Gaussianity of volume distribution
   - low tail, mode, and high tail configuration numbers that contribute to this temperature
   - `frac(Z)`: fraction of partition function that is accounted for by this range of configs
@@ -36,7 +36,7 @@ thermodynamic quantities:
 
 Additional rows that may be printed include
   - `natoms`: number of atoms in cell
-  - $`x_{Z}`$: fraction of cell with atomic number $Z$.
+  - $x_{Z}$: fraction of cell with atomic number $Z$.
 
 ### plots
 
@@ -67,7 +67,7 @@ that can be found through the python module search path.
 
 The `analysis()` function must take an `ase.atoms.Atoms` object as its first argument, other arbitrary
 arguments, and return an `np.ndarray`.  If the `--plot` flag is passed, the array must have two rows,
-one of $`x`$ values, one of $`y`$ values, and accept a `header=bool` optional argument that returns
+one of $x$ values, one of $y$ values, and accept a `header=bool` optional argument that returns
 the axis labels instead of the results.
 
 Arbitrary arguments to the `analysis()` function can be passed as JSON-encoded string in the `--analysis "<ANALYSIS> <ARGS_JSON>"`
