@@ -1,0 +1,66 @@
+[global]
+
+    output_filename_prefix = "test"
+    random_seed = 5
+
+    max_iter = 1000
+
+    stdout_report_interval_s = 10
+
+    snapshot_interval = 50
+
+    [global.step_size_tune]
+
+        interval = 100
+
+[ns]
+    n_walkers = 32
+    walk_length = 400
+    configs_module = "pymatnext.ns_configs.ase_atoms"
+
+    [ns.exit_conditions]
+        module = "pymatnext.loop_exit.Z_of_T"
+
+        [ns.exit_conditions.module_kwargs]
+            T_to_ns_quant = "kB"
+            T = 1.0
+
+[configs]
+
+    composition = "AlCu3"
+    n_atoms = 8
+    initial_rand_vol_per_atom = 125.0
+    initial_rand_min_dist = 1.5
+
+    [configs.calculator]
+
+        type = "ASE"
+        args.module = "examples.test.test_emt_al_cu"
+
+    [configs.walk]
+
+        gmc_traj_len = 8
+        cell_traj_len = 8
+        type_traj_len = 8
+
+        gmc_proportion = 1.0
+        cell_proportion = 2.0
+        type_proportion = 1.0
+
+        [configs.walk.cell]
+
+            min_aspect_ratio = 0.8
+
+            [configs.walk.cell.submove_probabilities]
+                volume = 0.8
+                shear = 0.1
+                stretch = 0.1
+
+        [configs.walk.type]
+
+            sGC = true
+
+            [configs.walk.type.mu]
+
+                13 = 1.0
+                29 = 0.5

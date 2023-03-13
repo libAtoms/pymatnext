@@ -1,0 +1,11 @@
+__pycache__
+*.pdf
+*.png
+*.state.json
+*.configs.extxyz
+*.traj.extxyz
+*.stdout*
+*.stderr*
+*.NS_samples
+job.*
+lammps.log

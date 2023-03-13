@@ -1,0 +1,1240 @@
+diff -N -u -r orig/cmake/CMakeLists.txt new/cmake/CMakeLists.txt
+--- orig/cmake/CMakeLists.txt	2022-12-01 11:18:57.828364685 -0500
++++ new/cmake/CMakeLists.txt	2022-12-01 11:18:06.205920258 -0500
+@@ -297,7 +297,8 @@
+   UEF
+   VORONOI
+   VTK
+-  YAFF)
++  YAFF
++  NS)
+ 
+ set(SUFFIX_PACKAGES CORESHELL GPU KOKKOS OPT INTEL OPENMP)
+ 
+diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
+--- orig/src/NS/fix_ns_cellmc.cpp	1969-12-31 19:00:00.000000000 -0500
++++ new/src/NS/fix_ns_cellmc.cpp	2021-10-29 13:44:33.723143736 -0400
+@@ -0,0 +1,458 @@
++/* ----------------------------------------------------------------------
++   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
++   http://lammps.sandia.gov, Sandia National Laboratories
++   Steve Plimpton, sjplimp@sandia.gov
++
++   Copyright (2003) Sandia Corporation.  Under the terms of Contract
++   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
++   certain rights in this software.  This software is distributed under
++   the GNU General Public License.
++
++   See the README file in the top-level LAMMPS directory.
++------------------------------------------------------------------------- */
++
++#ifdef DEBUG
++#include <iostream>
++#endif
++
++#include <stdio.h>
++#include <string.h>
++#include "fix_ns_cellmc.h"
++#include "atom.h"
++#include "comm.h"
++#include "force.h"
++#include "pair.h"
++#include "modify.h"
++#include "compute.h"
++#include "update.h"
++#include "random_mars.h"
++#include "domain.h"
++#include "memory.h"
++#include "respa.h"
++#include "error.h"
++#include "math_extra.h"
++#include <math.h>
++
++using namespace LAMMPS_NS;
++using namespace FixConst;
++
++#define MOVE_UNDEF -1
++#define MOVE_VOL 0
++#define MOVE_STRETCH 1
++#define MOVE_SHEAR 2
++
++/* ---------------------------------------------------------------------- */
++
++FixNSCellMC::FixNSCellMC(LAMMPS *lmp, int narg, char **arg) :
++  Fix(lmp, narg, arg)
++{
++  // args [fix ID group] 3..12 (3 walk, 6 step, 1? flat_V_prior)
++  // seed(i) Emax(d) min_aspect_ratio(d) pVol(d) dVol(d) pStretch(d) dStretch(d) pShear(d) dShear(d) [flat_V_prior(y/n)]
++  if (strcmp(style,"ns/cellmc") != 0 && narg != 3 + 3 + 6 && narg != 3 + 3 + 6 + 1)
++    error->all(FLERR,"Illegal number of args in fix ns/cellmc command");
++
++  if (!domain->triclinic)
++    error->all(FLERR,"fix ns/cellmc requires triclinic box (for now)");
++
++  // copied from fix_gmc.cpp
++  dynamic_group_allow = 1;
++  time_integrate = 1;
++
++  // copied from MC/fix_widom.cpp
++  // vector of attempt/success counts
++  vector_flag = 1;
++  size_vector = 6;
++  global_freq = 1;
++  extvector = 0;
++
++  // parse args
++  int iarg=3;
++  seed = utils::inumeric(FLERR,arg[iarg++],true,lmp);
++  Emax = utils::numeric(FLERR,arg[iarg++],true,lmp);
++  min_aspect_ratio = utils::numeric(FLERR,arg[iarg++],true,lmp);
++
++  pVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
++  dVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
++  pStretch = utils::numeric(FLERR,arg[iarg++],true, lmp);
++  dStretch = utils::numeric(FLERR,arg[iarg++],true, lmp);
++  pShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
++  dShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
++  flat_V_prior = 1;
++  if (narg == 3+3+6+1) {
++    if (strcmp(arg[iarg],"no") == 0) flat_V_prior = 0;
++    else if (strcmp(arg[iarg],"yes") != 0)
++      error->all(FLERR,"Illegal fix ns/cellmc flat_V_prior value");
++    iarg++;
++  }
++
++  // enforce min prob. is 0.0
++  pVol = (pVol < 0.0) ? 0.0 : pVol;
++  pStretch = (pStretch < 0.0) ? 0.0 : pStretch;
++  pShear = (pShear < 0.0) ? 0.0 : pShear;
++
++  // normalize (i.e. relative probbilities), 
++  double pSum = pVol + pStretch + pShear;
++  pVol /= pSum;
++  pStretch /= pSum;
++  pShear /= pSum;
++  // cumulative probabilities: Vol then Stretch then Shear
++  pStretch += pVol;
++  pShear = 1.0; // should be "pShear += pStretch;", but ensure there's no roundoff
++
++  // every node should have same seed, so random steps will be the same
++  // copied from fix_gmc.cpp, without the "+ comm->me"
++  random = new RanMars(lmp,seed);
++  memory->create(prevx,atom->nmax,3,"ns/cellmc:prevx");
++
++  last_move_type = MOVE_UNDEF;
++  n_attempt_vol = n_attempt_stretch = n_attempt_shear = 0;
++  n_success_vol = n_success_stretch = n_success_shear = 0;
++
++  // from fix_nh.cpp
++  // who knows what other things may be needed?
++  box_change |= (BOX_CHANGE_X | BOX_CHANGE_Y | BOX_CHANGE_Z |
++                 BOX_CHANGE_YZ | BOX_CHANGE_XZ | BOX_CHANGE_XY);
++  no_change_box = 1;
++}
++
++/* ---------------------------------------------------------------------- */
++
++int FixNSCellMC::setmask()
++{
++  // from gmc
++  int mask = 0;
++  mask |= INITIAL_INTEGRATE;
++  mask |= FINAL_INTEGRATE;
++  mask |= INITIAL_INTEGRATE_RESPA;
++  mask |= FINAL_INTEGRATE_RESPA;
++  return mask;
++}
++
++/* ---------------------------------------------------------------------- */
++
++void FixNSCellMC::init()
++{
++
++  // from gmc, but without having to create a random direction vector
++  int id = modify->find_compute("thermo_pe");
++
++  modify->compute[id]->invoked_scalar = -1;
++  pe_compute = modify->compute[id];
++  pe_compute->addstep(update->ntimestep+1);
++
++  if (strstr(update->integrate_style,"respa"))
++    error->all(FLERR,"fix ns/cellmc not compatible with RESPA");
++
++}
++
++void FixNSCellMC::initial_integrate(int vflag)
++{
++  // do move (unles rejected)
++
++  int natoms = atom->natoms;
++  int nlocal = atom->nlocal;
++  double **x = atom->x;
++
++  // save previous cell and positions
++  for (int i=0; i < 3; i++) {
++    prev_boxlo[i] = domain->boxlo[i];
++    prev_boxhi[i] = domain->boxhi[i];
++  }
++  prev_xy = domain->xy;
++  prev_yz = domain->yz;
++  prev_xz = domain->xz;
++
++  for (int iat=0; iat < nlocal; iat++)
++    for (int j=0; j < 3; j++)
++        prevx[iat][j] = x[iat][j];
++
++  double boxext[3];
++  for (int i=0; i < 3; i++)
++    boxext[i] = domain->boxhi[i] - domain->boxlo[i];
++
++  last_move_type = MOVE_UNDEF;
++  move_rejected_early = false;
++
++  // default to accept, will be changed below to reject (-1.0) or probablistic (if flat_V_prior != 1)
++  double rv = random->uniform();
++  double new_cell[3][3];
++  // pick a step type
++  if (rv < pVol) {
++    n_attempt_vol++;
++    last_move_type = MOVE_VOL;
++    // volume step
++    double orig_V;
++    if (domain->dimension == 3) orig_V = domain->xprd * domain->yprd * domain->zprd;
++    else orig_V = domain->xprd * domain->yprd;
++
++    double dV = random->gaussian(0.0, dVol);
++    double new_V = orig_V + dV;
++#ifdef DEBUG
++    std::cout << "VOLUME volumetric strain " << dV << " / " << orig_V << " = " << dV/orig_V << " ";
++#endif
++    if (new_V/orig_V < 0.5) {
++      move_rejected_early = true;
++#ifdef DEBUG
++      std::cout << "REJECT new_V/orig_V < 0.5" << std::endl;
++#endif
++    } else {
++      if (flat_V_prior == 0 && new_V < orig_V && random->uniform() > pow(new_V / orig_V, natoms)) {
++        move_rejected_early = true;
++#ifdef DEBUG
++        std::cout << "REJECT V probability " << pow(new_V / orig_V, natoms) << std::endl;
++#endif
++      } else {
++        double transform_diag = pow(new_V / orig_V, 1.0/3.0);
++        new_cell[0][0] = boxext[0] * transform_diag;
++        new_cell[0][1] = 0.0;
++        new_cell[0][2] = 0.0;
++        new_cell[1][0] = domain->xy * transform_diag;
++        new_cell[1][1] = boxext[1] * transform_diag;
++        new_cell[1][2] = 0.0;
++        new_cell[2][0] = domain->xz * transform_diag;
++        new_cell[2][1] = domain->yz * transform_diag;
++        new_cell[2][2] = boxext[2] * transform_diag;
++      }
++    }
++  } else if (rv < pStretch) {
++    n_attempt_stretch++;
++    last_move_type = MOVE_STRETCH;
++    // stretch step
++    // pick directions to use v_ind and (v_ind+1)%3
++#ifdef DEBUG
++    std::cout << "STRETCH ";
++#endif
++    int v_ind = int(3 * random->uniform()) % 3;
++    rv = random->gaussian(0.0, dStretch);
++    double transform_diag[3];
++    transform_diag[v_ind] = exp(rv);
++    transform_diag[(v_ind+1)%3] = exp(-rv);
++    transform_diag[(v_ind+2)%3] = 1.0;
++#ifdef DEBUG
++    std::cout << transform_diag[0] << " " << transform_diag[1] << " " << transform_diag[2] << " ";
++#endif
++    // create new cell for aspect ratio test and new domain
++    new_cell[0][0] = boxext[0] * transform_diag[0];
++    new_cell[0][1] = 0.0;
++    new_cell[0][2] = 0.0;
++    new_cell[1][0] = domain->xy * transform_diag[0];
++    new_cell[1][1] = boxext[1] * transform_diag[1];
++    new_cell[1][2] = 0.0;
++    new_cell[2][0] = domain->xz * transform_diag[0];
++    new_cell[2][1] = domain->yz * transform_diag[1];
++    new_cell[2][2] = boxext[2] * transform_diag[2];
++    if (min_aspect_ratio_val(new_cell) < min_aspect_ratio) {
++      move_rejected_early = true;
++#ifdef DEBUG
++      std::cout << "REJECT min_aspect_ratio " << min_aspect_ratio_val(new_cell) << std::endl;
++#endif
++    }
++  } else {
++    n_attempt_shear++;
++    last_move_type = MOVE_SHEAR;
++    // shear step
++    // save original cell and a temporary cell
++#ifdef DEBUG
++    std::cout << "SHEAR ";
++#endif
++    double orig_cell[3][3], t_cell[3][3];
++    t_cell[0][0] = orig_cell[0][0] = boxext[0];
++    t_cell[0][1] = orig_cell[0][1] = 0.0;
++    t_cell[0][2] = orig_cell[0][2] = 0.0;
++    t_cell[1][0] = orig_cell[1][0] = domain->xy;
++    t_cell[1][1] = orig_cell[1][1] = boxext[1];
++    t_cell[1][2] = orig_cell[1][2] = 0.0;
++    t_cell[2][0] = orig_cell[2][0] = domain->xz;
++    t_cell[2][1] = orig_cell[2][1] = domain->yz;
++    t_cell[2][2] = orig_cell[2][2] = boxext[2];
++
++    // pick vector to perturb
++    int vec_ind = int(3 * random->uniform()) % 3;
++
++    // perturb t_cell[vec_ind] along other two vectors
++    double vhat[3];
++    for (int di=1; di < 3; di++) {
++      for (int i=0; i < 3; i++)
++        vhat[i] = orig_cell[(vec_ind + di) % 3][i];
++      MathExtra::norm3(vhat);
++      rv = random->gaussian(0.0, dShear);
++#ifdef DEBUG
++    std::cout << (vec_ind + di) % 3 << " " << rv << " ";
++#endif
++      for (int i=0; i < 3; i++)
++        t_cell[vec_ind][i] += rv * vhat[i];
++    }
++
++    if (min_aspect_ratio_val(t_cell) < min_aspect_ratio) {
++      move_rejected_early = true;
++#ifdef DEBUG
++      std::cout << "REJECT min_aspect_ratio " << min_aspect_ratio_val(t_cell) << std::endl;
++#endif
++    } else {
++      // rotate new_cell back to LAMMPS orientation
++
++      double a0_norm = sqrt(MathExtra::dot3(t_cell[0], t_cell[0]));
++      new_cell[0][0] = a0_norm;
++      new_cell[0][1] = 0.0;
++      new_cell[0][2] = 0.0;
++
++      double a0_hat[3] = {t_cell[0][0], t_cell[0][1], t_cell[0][2]}; MathExtra::norm3(a0_hat);
++      new_cell[1][0] = MathExtra::dot3(t_cell[1], a0_hat);
++      double a0_hat_cross_a1[3]; MathExtra::cross3(a0_hat, t_cell[1], a0_hat_cross_a1);
++      new_cell[1][1] = sqrt(MathExtra::dot3(a0_hat_cross_a1, a0_hat_cross_a1));
++      new_cell[1][2] = 0.0;
++
++      double a0_cross_a1_hat[3] = {a0_hat_cross_a1[0], a0_hat_cross_a1[1], a0_hat_cross_a1[2]};
++      MathExtra::norm3(a0_cross_a1_hat);
++
++      double a0_cross_a1_hat_cross_a0_hat[3];
++      MathExtra::cross3(a0_cross_a1_hat, a0_hat, a0_cross_a1_hat_cross_a0_hat);
++      new_cell[2][0] = MathExtra::dot3(t_cell[2], a0_hat);
++      new_cell[2][1] = MathExtra::dot3(t_cell[2], a0_cross_a1_hat_cross_a0_hat);
++      new_cell[2][2] = MathExtra::dot3(t_cell[2], a0_cross_a1_hat);
++    }
++  }
++
++  if (!move_rejected_early) {
++    // apply move to box
++    double boxctr[3];
++    for (int i=0; i < 3; i++)
++      boxctr[i] = 0.5*(prev_boxhi[0] + prev_boxlo[0]);
++
++    domain->x2lamda(nlocal);
++
++    boxext[0] =  new_cell[0][0];
++    domain->xy = new_cell[1][0];
++    boxext[1] =  new_cell[1][1];
++    domain->xz = new_cell[2][0];
++    domain->yz = new_cell[2][1];
++    boxext[2] =  new_cell[2][2];
++
++    for (int i=0; i < 3; i++) {
++      domain->boxlo[i] = boxctr[i] - boxext[i]/2.0;
++      domain->boxhi[i] = boxctr[i] + boxext[i]/2.0;
++    }
++
++    domain->set_global_box();
++    domain->set_local_box();
++
++    domain->lamda2x(nlocal);
++  }
++
++  // copied from fix_gmc.cpp
++  // not sure if it's needed on rejections
++  int id = modify->find_compute("thermo_pe");
++
++  modify->compute[id]->invoked_scalar = -1;
++  pe_compute = modify->compute[id];
++  pe_compute->addstep(update->ntimestep+1);
++}
++
++/* ---------------------------------------------------------------------- */
++
++void FixNSCellMC::final_integrate()
++{
++  // if potential energy is above Emax then reject move
++  double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
++
++  if (move_rejected_early) {
++    return;
++  }
++
++  if (ecurrent >= Emax) {
++#ifdef DEBUG
++    std::cout << "REJECT E == " << ecurrent << " >= Emax == " << Emax << std::endl;
++#endif
++    for (int i=0; i < 3; i++) {
++      domain->boxlo[i] = prev_boxlo[i];
++      domain->boxhi[i] = prev_boxhi[i];
++    }
++    domain->xy = prev_xy;
++    domain->yz = prev_yz;
++    domain->xz = prev_xz;
++
++    domain->set_global_box();
++    domain->set_local_box();
++
++    double **x = atom->x;
++    int nlocal = atom->nlocal;
++    for (int iat=0; iat < nlocal; iat++)
++      for (int j=0; j < 3; j++)
++        x[iat][j] = prevx[iat][j];
++
++  } else {
++    switch (last_move_type) {
++        case MOVE_VOL:
++            n_success_vol++;
++            break;
++        case MOVE_STRETCH:
++            n_success_stretch++;
++            break;
++        case MOVE_SHEAR:
++            n_success_shear++;
++            break;
++        default:
++            error->all(FLERR,"Illegal value of last_move_type increment n_success_*");
++    }
++#ifdef DEBUG
++double new_cell[3][3];
++new_cell[0][0] = domain->boxhi[0] - domain->boxlo[0];
++new_cell[0][1] = 0.0;
++new_cell[0][2] = 0.0;
++new_cell[1][0] = domain->xy;
++new_cell[1][1] = domain->boxhi[1] - domain->boxlo[1];
++new_cell[1][2] = 0.0;
++new_cell[2][0] = domain->xz;
++new_cell[2][1] = domain->yz;
++new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
++    std::cout << "ACCEPT E == " << ecurrent << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
++    // std::cout << "final cell " << new_cell[0][0] << " " << new_cell[0][1] << " " << new_cell[0][2] << std::endl;
++    // std::cout << "           " << new_cell[1][0] << " " << new_cell[1][1] << " " << new_cell[1][2] << std::endl;
++    // std::cout << "           " << new_cell[2][0] << " " << new_cell[2][1] << " " << new_cell[2][2] << std::endl;
++#endif
++  }
++}
++
++FixNSCellMC::~FixNSCellMC()
++{
++
++  // delete temperature and pressure if fix created them
++  delete random;
++
++  memory->destroy(prevx);
++
++}
++
++double FixNSCellMC::min_aspect_ratio_val(double cell[3][3]) {
++    double min_val = std::numeric_limits<double>::max();
++    for (int i=0; i < 3; i++) {
++        double vnorm_hat[3];
++        MathExtra::cross3(cell[(i+1)%3], cell[(i+2)%3], vnorm_hat);
++        MathExtra::norm3(vnorm_hat);
++        double val = fabs(MathExtra::dot3(vnorm_hat, cell[i]));
++        min_val = (val < min_val) ? val : min_val;
++    }
++
++    double V;
++    if (domain->dimension == 3) V = domain->xprd * domain->yprd * domain->zprd;
++    else V = domain->xprd * domain->yprd;
++
++    return min_val / pow(V, 1.0/3.0);
++}
++
++/* ----------------------------------------------------------------------
++  return acceptance numbers
++------------------------------------------------------------------------- */
++
++double FixNSCellMC::compute_vector(int n)
++{
++  switch (n) {
++      case 0: return n_attempt_vol;
++      case 1: return n_success_vol;
++      case 2: return n_attempt_stretch;
++      case 3: return n_success_stretch;
++      case 4: return n_attempt_shear;
++      case 5: return n_success_shear;
++  }
++  return -1.0;
++}
+diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
+--- orig/src/NS/fix_ns_cellmc.h	1969-12-31 19:00:00.000000000 -0500
++++ new/src/NS/fix_ns_cellmc.h	2021-10-27 09:53:55.213983419 -0400
+@@ -0,0 +1,72 @@
++/* -*- c++ -*- ----------------------------------------------------------
++   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
++   http://lammps.sandia.gov, Sandia National Laboratories
++   Steve Plimpton, sjplimp@sandia.gov
++
++   Copyright (2003) Sandia Corporation.  Under the terms of Contract
++   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
++   certain rights in this software.  This software is distributed under
++   the GNU General Public License.
++
++   See the README file in the top-level LAMMPS directory.
++------------------------------------------------------------------------- */
++
++#ifdef FIX_CLASS
++
++FixStyle(ns/cellmc,FixNSCellMC)
++
++#else
++
++#ifndef LMP_FIX_NS_CELLMC_H
++#define LMP_FIX_NS_CELLMC_H
++
++#include "fix.h"
++
++namespace LAMMPS_NS {
++
++class FixNSCellMC : public Fix {
++ public:
++  FixNSCellMC(class LAMMPS *, int, char **);
++  ~FixNSCellMC();
++  int setmask();
++  virtual void init();
++  virtual void initial_integrate(int);
++  virtual void final_integrate();
++  double compute_vector(int);
++
++ protected:
++  class Compute *pe_compute;
++  double **prevx;
++  double prev_boxlo[3], prev_boxhi[3], prev_xy, prev_yz, prev_xz;
++  int seed;
++  double Emax;
++  double min_aspect_ratio;
++  int flat_V_prior;
++  class RanMars *random;
++  double pVol, dVol, pStretch, dStretch, pShear, dShear;
++  int peflag;
++  char *id_pe;
++  char str[64];
++
++  bool move_rejected_early;
++  int last_move_type;
++  int n_attempt_vol, n_attempt_stretch, n_attempt_shear, n_success_vol, n_success_stretch, n_success_shear;
++
++ private:
++  double min_aspect_ratio_val(double cell[3][3]);
++};
++
++}
++
++#endif
++#endif
++
++/* ERROR/WARNING messages:
++
++E: Illegal ... command
++
++Self-explanatory.  Check the input script syntax and compare to the
++documentation for the command.  You can use -echo screen as a
++command-line option when running LAMMPS to see the offending line.
++
++*/
+diff -N -u -r orig/src/NS/fix_ns_gmc.cpp new/src/NS/fix_ns_gmc.cpp
+--- orig/src/NS/fix_ns_gmc.cpp	1969-12-31 19:00:00.000000000 -0500
++++ new/src/NS/fix_ns_gmc.cpp	2021-10-27 09:53:55.215983401 -0400
+@@ -0,0 +1,201 @@
++/* ----------------------------------------------------------------------
++   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
++   http://lammps.sandia.gov, Sandia National Laboratories
++   Steve Plimpton, sjplimp@sandia.gov
++
++   Copyright (2003) Sandia Corporation.  Under the terms of Contract
++   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
++   certain rights in this software.  This software is distributed under
++   the GNU General Public License.
++
++   See the README file in the top-level LAMMPS directory.
++------------------------------------------------------------------------- */
++
++#include <stdio.h>
++#include <string.h>
++#include "fix_ns_gmc.h"
++#include "atom.h"
++#include "comm.h"
++#include "force.h"
++#include "pair.h"
++#include "modify.h"
++#include "compute.h"
++#include "update.h"
++#include "random_mars.h"
++#include "memory.h"
++#include "respa.h"
++#include "error.h"
++#include <math.h>
++
++using namespace LAMMPS_NS;
++using namespace FixConst;
++
++/* ---------------------------------------------------------------------- */
++
++FixNSGMC::FixNSGMC(LAMMPS *lmp, int narg, char **arg) :
++  Fix(lmp, narg, arg)
++{
++  if (strcmp(style,"ns/gmc") != 0 && narg < 5)
++    error->all(FLERR,"Illegal fix ns/gmc command");
++
++  dynamic_group_allow = 1;
++  time_integrate = 1;
++
++  seed = utils::inumeric(FLERR,arg[3],true,lmp);
++  Emax = utils::numeric(FLERR,arg[4],true,lmp);
++
++  if (seed > 0) {
++    random = new RanMars(lmp,seed + comm->me);
++  }
++  memory->create(dx,atom->nmax,3,"ns/gmc:dx");
++
++
++}
++
++/* ---------------------------------------------------------------------- */
++
++int FixNSGMC::setmask()
++{
++  int mask = 0;
++  mask |= INITIAL_INTEGRATE;
++  mask |= FINAL_INTEGRATE;
++  mask |= INITIAL_INTEGRATE_RESPA;
++  mask |= FINAL_INTEGRATE_RESPA;
++  return mask;
++}
++
++/* ---------------------------------------------------------------------- */
++
++void FixNSGMC::init()
++{
++
++  int id = modify->find_compute("thermo_pe");
++
++  modify->compute[id]->invoked_scalar = -1;
++  pe_compute = modify->compute[id];
++  pe_compute->addstep(update->ntimestep+1);
++
++
++  int nlocal = atom->nlocal;
++  double dx2sum = 0;
++  double **v = atom->v;
++
++  if (seed > 0) {
++    for(int i = 0; i < nlocal; i++) {
++      dx[i][0] = random->gaussian();
++      dx[i][1] = random->gaussian();
++      dx[i][2] = random->gaussian();
++      dx2sum += dx[i][0]*dx[i][0]+dx[i][1]*dx[i][1]+dx[i][2]*dx[i][2];
++    }
++  } else {
++    for(int i = 0; i < nlocal; i++) {
++      dx[i][0] = v[i][0];
++      dx[i][1] = v[i][1];
++      dx[i][2] = v[i][2];
++      dx2sum += dx[i][0]*dx[i][0]+dx[i][1]*dx[i][1]+dx[i][2]*dx[i][2];
++    }
++  }
++
++  dx2sum = sqrt(dx2sum);
++
++  for(int i = 0; i < nlocal; i++) {
++    dx[i][0] /= dx2sum;
++    dx[i][1] /= dx2sum;
++    dx[i][2] /= dx2sum;
++  }
++
++  step_size = update->dt;
++
++  if (strstr(update->integrate_style,"respa"))
++    error->all(FLERR,"fix ns/gmc not compatible with RESPA");
++
++}
++
++void FixNSGMC::initial_integrate(int vflag)
++{
++  // update x of atoms in group
++
++  double **x = atom->x;
++  int *mask = atom->mask;
++  int nlocal = atom->nlocal;
++
++
++  if (igroup == atom->firstgroup) nlocal = atom->nfirst;
++  for (int i = 0; i < nlocal; i++)
++    if (mask[i] & groupbit) {
++      x[i][0] += step_size * dx[i][0];
++      x[i][1] += step_size * dx[i][1];
++      x[i][2] += step_size * dx[i][2];
++    }
++
++  int id = modify->find_compute("thermo_pe");
++
++  modify->compute[id]->invoked_scalar = -1;
++  pe_compute = modify->compute[id];
++  pe_compute->addstep(update->ntimestep+1);
++
++
++}
++
++/* ---------------------------------------------------------------------- */
++
++void FixNSGMC::final_integrate()
++{
++
++  // if potential energy is above Emax then want to modify dx with
++  // forces to change trajectory
++
++  double **f = atom->f;
++  int *mask = atom->mask;
++  int nlocal = atom->nlocal;
++
++  double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
++
++  if (ecurrent < Emax)
++    // continue straight
++    return;
++
++  // try to reflect from boundary
++  double fsum = 0;
++  double fhatdotdx = 0;
++  for (int i = 0; i < nlocal; i++)
++      if (mask[i] & groupbit)
++        fsum += f[i][0]*f[i][0]+
++                f[i][1]*f[i][1]+
++                f[i][2]*f[i][2];
++  fsum = sqrt(fsum);
++
++  // should also detect nan
++  if (fsum != 0.0) {
++    for (int i = 0; i < nlocal; i++) {
++      if (mask[i] & groupbit) {
++            fhatdotdx += f[i][0]/fsum*dx[i][0];
++            fhatdotdx += f[i][1]/fsum*dx[i][1];
++            fhatdotdx += f[i][2]/fsum*dx[i][2];
++      }
++    }
++
++    for (int i = 0; i < nlocal; i++) {
++      if (mask[i] & groupbit) {
++            dx[i][0] -= 2*f[i][0]/fsum*fhatdotdx;
++            dx[i][1] -= 2*f[i][1]/fsum*fhatdotdx;
++            dx[i][2] -= 2*f[i][2]/fsum*fhatdotdx;
++      }
++    }
++  }
++
++}
++
++FixNSGMC::~FixNSGMC()
++{
++
++  // delete temperature and pressure if fix created them
++  if (seed > 0) {
++      delete random;
++  }
++
++  memory->destroy(dx);
++
++}
++
++
+diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
+--- orig/src/NS/fix_ns_gmc.h	1969-12-31 19:00:00.000000000 -0500
++++ new/src/NS/fix_ns_gmc.h	2021-10-26 22:43:21.969174377 -0400
+@@ -0,0 +1,61 @@
++/* -*- c++ -*- ----------------------------------------------------------
++   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
++   http://lammps.sandia.gov, Sandia National Laboratories
++   Steve Plimpton, sjplimp@sandia.gov
++
++   Copyright (2003) Sandia Corporation.  Under the terms of Contract
++   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
++   certain rights in this software.  This software is distributed under
++   the GNU General Public License.
++
++   See the README file in the top-level LAMMPS directory.
++------------------------------------------------------------------------- */
++
++#ifdef FIX_CLASS
++
++FixStyle(ns/gmc,FixNSGMC)
++
++#else
++
++#ifndef LMP_FIX_NSGMC_H
++#define LMP_FIX_NSGMC_H
++
++#include "fix.h"
++
++namespace LAMMPS_NS {
++
++class FixNSGMC : public Fix {
++ public:
++  FixNSGMC(class LAMMPS *, int, char **);
++  ~FixNSGMC();
++  int setmask();
++  virtual void init();
++  virtual void initial_integrate(int);
++  virtual void final_integrate();
++
++ protected:
++  class Compute *pe_compute;
++  double **dx;
++  int seed;
++  double Emax;
++  class RanMars *random;
++  double step_size;
++  int peflag;
++  char *id_pe;
++  char str[64];
++};
++
++}
++
++#endif
++#endif
++
++/* ERROR/WARNING messages:
++
++E: Illegal ... command
++
++Self-explanatory.  Check the input script syntax and compare to the
++documentation for the command.  You can use -echo screen as a
++command-line option when running LAMMPS to see the offending line.
++
++*/
+diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
+--- orig/src/NS/fix_ns_type.cpp	1969-12-31 19:00:00.000000000 -0500
++++ new/src/NS/fix_ns_type.cpp	2021-11-03 12:50:02.815940067 -0400
+@@ -0,0 +1,341 @@
++/* ----------------------------------------------------------------------
++   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
++   http://lammps.sandia.gov, Sandia National Laboratories
++   Steve Plimpton, sjplimp@sandia.gov
++
++   Copyright (2003) Sandia Corporation.  Under the terms of Contract
++   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
++   certain rights in this software.  This software is distributed under
++   the GNU General Public License.
++
++   See the README file in the top-level LAMMPS directory.
++------------------------------------------------------------------------- */
++
++// #define SWAP_POS
++
++#ifdef DEBUG
++#include <iostream>
++#endif
++
++#include <stdio.h>
++#include <string.h>
++#include "fix_ns_type.h"
++#include "atom.h"
++#include "comm.h"
++#include "force.h"
++#include "pair.h"
++#include "modify.h"
++#include "neighbor.h"
++#include "compute.h"
++#include "update.h"
++#include "random_mars.h"
++#include "domain.h"
++#include "memory.h"
++#include "respa.h"
++#include "error.h"
++#include "math_extra.h"
++#include <math.h>
++
++using namespace LAMMPS_NS;
++using namespace FixConst;
++
++/* ---------------------------------------------------------------------- */
++
++FixNSType::FixNSType(LAMMPS *lmp, int narg, char **arg) :
++  Fix(lmp, narg, arg)
++{
++  // args [fix ID group] seed(i) Emax(d) semi_GC_flag(b) mu_1 ...
++  if (strcmp(style,"ns/type") != 0 && narg != 6 && narg != 6 + atom->ntypes)
++    error->all(FLERR,"Illegal number of args in fix ns/type command");
++
++  // copied from fix_gmc.cpp
++  dynamic_group_allow = 1;
++  time_integrate = 1;
++
++  // copied from MC/fix_widom.cpp
++  // vector of attempt/success counts
++  vector_flag = 1;
++  size_vector = 2;
++  global_freq = 1;
++  extvector = 0;
++
++  // parse args
++  int iarg=3;
++  seed = utils::inumeric(FLERR,arg[iarg++],true,lmp);
++  Emax = utils::numeric(FLERR,arg[iarg++],true,lmp);
++
++  semi_GC_flag = 1;
++  if (strcmp(arg[iarg],"no") == 0) semi_GC_flag = 0;
++  else if (strcmp(arg[iarg],"yes") != 0)
++    error->all(FLERR,"Illegal fix ns/type flat_V_prior value");
++  iarg++;
++
++  if (semi_GC_flag) {
++    if (narg != 6 + atom->ntypes)
++      error->all(FLERR,"semi_GC_flag requires ntypes mu values");
++    mu = new double[atom->ntypes];
++    for (int i=0; i < atom->ntypes; i++) {
++      mu[i] = utils::numeric(FLERR,arg[iarg++],true,lmp);
++    }
++  } else {
++    mu = 0;
++  }
++
++  // random_g will be used to pick one process's atoms to be perturbed, so
++  // every process has the same seed, so that all processes agree on which
++  // process was picked.
++  // random_l will be used only on process that contains that atom, to
++  // pick details of perturbation, and it may be called an unpredictable number of
++  // times, which will make it diverge between the different processes.
++  random_g = new RanMars(lmp,seed);
++  random_l = new RanMars(lmp,seed + 1 + comm->me);
++  memory->create(prevtype,atom->nmax,"ns/type:prevtype");
++#ifdef SWAP_POS
++  memory->create(prevx,atom->nmax,3,"ns/type:prevx");
++#endif
++
++  n_attempt = n_success = 0;
++
++  force_reneighbor = 1;
++  next_reneighbor = update->ntimestep + 1;
++}
++
++/* ---------------------------------------------------------------------- */
++
++int FixNSType::setmask()
++{
++  // from gmc
++  int mask = 0;
++  mask |= INITIAL_INTEGRATE;
++  mask |= PRE_EXCHANGE;
++  mask |= FINAL_INTEGRATE;
++  mask |= INITIAL_INTEGRATE_RESPA;
++  mask |= FINAL_INTEGRATE_RESPA;
++  return mask;
++}
++
++/* ---------------------------------------------------------------------- */
++
++void FixNSType::init()
++{
++  // from gmc
++  int id = modify->find_compute("thermo_pe");
++
++  modify->compute[id]->invoked_scalar = -1;
++  pe_compute = modify->compute[id];
++  pe_compute->addstep(update->ntimestep+1);
++
++  if (strstr(update->integrate_style,"respa"))
++    error->all(FLERR,"fix ns/type not compatible with RESPA");
++
++  // based on fix_atom_swap.cpp
++  int ntypes = atom->ntypes;
++  double **cutsq = force->pair->cutsq;
++  unequal_cutoffs = false;
++  for (int itype = 1; itype <= ntypes; itype++)
++    for (int jtype = 1; jtype <= ntypes; jtype++)
++      for (int ktype = 1; ktype <= ntypes; ktype++)
++        if (cutsq[itype][ktype] != cutsq[jtype][ktype])
++          unequal_cutoffs = true;
++
++  // need to accumulate dmuN relative to run-initial composition, since
++  // Emax is shifted based on that initial, fixed composition
++  cumulative_dmuN = 0.0;
++
++}
++
++void FixNSType::pre_exchange()
++{
++  // NOTE: need to check if this is really needed, since unlike atom_swap.cpp
++  // remainder of actual normal sequence will run before energy is calculated
++  // Also, presumable need to do this again if step is rejected, but not sure where
++  if (unequal_cutoffs) {
++    if (domain->triclinic) domain->x2lamda(atom->nlocal);
++    domain->pbc();
++    comm->exchange();
++    comm->borders();
++    if (domain->triclinic) domain->lamda2x(atom->nlocal+atom->nghost);
++    if (modify->n_pre_neighbor) modify->pre_neighbor();
++    neighbor->build(1);
++  }
++
++  next_reneighbor = update->ntimestep + 1;
++}
++
++void FixNSType::initial_integrate(int vflag)
++{
++  // do move (unless rejected)
++
++  n_attempt++;
++
++  int nlocal = atom->nlocal;
++  int ntypes = atom->ntypes;
++
++  int *type = atom->type;
++  for (int iat=0; iat < nlocal; iat++)
++      prevtype[iat] = type[iat];
++
++#ifdef SWAP_POS
++  double **x = atom->x;
++  for (int iat=0; iat < nlocal; iat++)
++      for (int jat=0; jat < 3; jat++)
++          prevx[iat][jat] = x[iat][jat];
++#endif
++
++  double rv = random_g->uniform();
++  int rnd_proc = static_cast<int>(comm->nprocs * rv) % comm->nprocs;
++  if (comm->me != rnd_proc)
++    return;
++
++  rv = random_l->uniform();
++  int atom_0 = static_cast<int>(nlocal * rv) % nlocal;
++
++  if (semi_GC_flag) {
++    // perturb type randomly, store change to mu*N term
++    rv = random_l->uniform();
++    int dtype = 1 + static_cast<int>(rv * (ntypes-1)) % (ntypes-1);
++    int new_type = 1 + (((type[atom_0]-1) + dtype) % ntypes);
++    dmuN = mu[type[atom_0]-1] - mu[new_type-1];
++    type[atom_0] = new_type;
++#ifdef DEBUG
++    std::cout << "SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " <<
++                                                  type[atom_0] << " mu " << mu[type[atom_0]-1] << " ";
++#endif
++  } else {
++    bool all_same = true;
++    for (int i=1; i < nlocal; i++)
++      if (type[0] != type[i]) {
++        all_same = false;
++        break;
++      }
++    if (all_same)
++      return;
++
++    int atom_1 = atom_0;
++    while (type[atom_0] == type[atom_1]) {
++        rv = random_l->uniform();
++        atom_1 = static_cast<int>(nlocal * rv) % nlocal;
++    }
++
++#ifdef DEBUG
++#ifdef SWAP_POS
++    std::cout << "SWAP i " << atom_0 << " type " << type[atom_0] << " x " << x[atom_0][0] << " " << x[atom_0][1] << " " << x[atom_0][2] << " <-> " <<
++                     " i " << atom_1 << " type " << type[atom_1] << " x " << x[atom_1][0] << " " << x[atom_1][1] << " " << x[atom_1][2] << " ";
++#else
++    std::cout << "SWAP i " << atom_0 << " type " << type[atom_0] << " <-> i " << atom_1 << " type " << type[atom_1] << " ";
++#endif
++#endif
++
++#ifdef SWAP_POS
++    double tx[3];
++    tx[0] = x[atom_0][0];
++    tx[1] = x[atom_0][1];
++    tx[2] = x[atom_0][2];
++    x[atom_0][0] = x[atom_1][0];
++    x[atom_0][1] = x[atom_1][1];
++    x[atom_0][2] = x[atom_1][2];
++    x[atom_1][0] = tx[0];
++    x[atom_1][1] = tx[1];
++    x[atom_1][2] = tx[2];
++#else
++    int t_type = type[atom_0];
++    type[atom_0] = type[atom_1];
++    type[atom_1] = t_type;
++#endif
++
++    dmuN = 0.0;
++  }
++
++  // copied from fix_gmc.cpp
++  // not sure if it's needed on rejections
++  int id = modify->find_compute("thermo_pe");
++
++  modify->compute[id]->invoked_scalar = -1;
++  pe_compute = modify->compute[id];
++  pe_compute->addstep(update->ntimestep+1);
++}
++
++/* ---------------------------------------------------------------------- */
++
++void FixNSType::final_integrate()
++{
++  double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
++
++  // if potential energy + d(mu N) is above Emax then reject move
++  // need to include previous steps' cumulative dmuN contributions, as well as current ones
++  if (ecurrent + cumulative_dmuN + dmuN >= Emax) {
++#ifdef DEBUG
++    std::cout << "REJECT E == " << ecurrent << " + " << cumulative_dmuN + dmuN << " >= Emax == " << Emax << " " << std::endl;
++#endif
++    // reject move, so don't touch cumulative_dmuN, since type change that led to current dmuN was reverted
++
++    int nlocal = atom->nlocal;
++    int *type = atom->type;
++// With SWAP_POS, type is only modified for semi-GC, so only has to be undone in that case, and x
++// has to be reverted to undo swap move.
++// By default (no SWAP_POS), type is modified for both swap and semi-GC, so undoing either step type
++// uses prevtype
++#ifdef SWAP_POS
++    if (semi_GC_flag) {
++#endif
++        for (int iat=0; iat < nlocal; iat++)
++            type[iat] = prevtype[iat];
++#ifdef SWAP_POS
++    } else {
++        double **x = atom->x;
++        for (int iat=0; iat < nlocal; iat++)
++            for (int jat=0; jat < 3; jat++)
++                x[iat][jat] = prevx[iat][jat];
++    }
++#endif
++
++    // NOTE: no idea if this is necessary, or the right place to do this after rejecting a move
++    // I suspect it's not necessary at all, since next step all these things will be done anyway
++    if (unequal_cutoffs) {
++      if (domain->triclinic) domain->x2lamda(atom->nlocal);
++      domain->pbc();
++      comm->exchange();
++      comm->borders();
++      if (domain->triclinic) domain->lamda2x(atom->nlocal+atom->nghost);
++      if (modify->n_pre_neighbor) modify->pre_neighbor();
++      neighbor->build(1);
++    }
++  } else {
++    // accept move, so accumulate dmuN contribution from this step
++    cumulative_dmuN += dmuN;
++    n_success++;
++#ifdef DEBUG
++    std::cout << "ACCEPT E == " << ecurrent << " + " << cumulative_dmuN << " < Emax == " << Emax << std::endl;
++#endif
++  }
++}
++
++FixNSType::~FixNSType()
++{
++
++  // delete temperature and pressure if fix created them
++  delete random_g;
++  delete random_l;
++  if (mu) {
++    delete[] mu;
++  }
++
++  memory->destroy(prevtype);
++#ifdef SWAP_POS
++  memory->destroy(prevx);
++#endif
++
++}
++
++/* ----------------------------------------------------------------------
++  return acceptance numbers
++------------------------------------------------------------------------- */
++
++double FixNSType::compute_vector(int n)
++{
++  switch (n) {
++      case 0: return n_attempt;
++      case 1: return n_success;
++  }
++  return -1.0;
++}
+diff -N -u -r orig/src/NS/fix_ns_type.h new/src/NS/fix_ns_type.h
+--- orig/src/NS/fix_ns_type.h	1969-12-31 19:00:00.000000000 -0500
++++ new/src/NS/fix_ns_type.h	2021-10-29 13:36:52.548950547 -0400
+@@ -0,0 +1,70 @@
++/* -*- c++ -*- ----------------------------------------------------------
++   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
++   http://lammps.sandia.gov, Sandia National Laboratories
++   Steve Plimpton, sjplimp@sandia.gov
++
++   Copyright (2003) Sandia Corporation.  Under the terms of Contract
++   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
++   certain rights in this software.  This software is distributed under
++   the GNU General Public License.
++
++   See the README file in the top-level LAMMPS directory.
++------------------------------------------------------------------------- */
++
++#ifdef FIX_CLASS
++
++FixStyle(ns/type,FixNSType)
++
++#else
++
++#ifndef LMP_FIX_NS_TYPE_H
++#define LMP_FIX_NS_TYPE_H
++
++#include "fix.h"
++
++namespace LAMMPS_NS {
++
++class FixNSType : public Fix {
++ public:
++  FixNSType(class LAMMPS *, int, char **);
++  ~FixNSType();
++  int setmask();
++  virtual void init();
++  virtual void pre_exchange();
++  virtual void initial_integrate(int);
++  virtual void final_integrate();
++  double compute_vector(int);
++
++ protected:
++  class Compute *pe_compute;
++  int *prevtype;
++  double **prevx;
++  int seed;
++  double Emax;
++  class RanMars *random_g, *random_l;
++  int semi_GC_flag;
++  double *mu;
++  int peflag;
++  char *id_pe;
++  char str[64];
++  double dmuN, cumulative_dmuN;
++
++  bool unequal_cutoffs;
++
++  int n_attempt, n_success;
++};
++
++}
++
++#endif
++#endif
++
++/* ERROR/WARNING messages:
++
++E: Illegal ... command
++
++Self-explanatory.  Check the input script syntax and compare to the
++documentation for the command.  You can use -echo screen as a
++command-line option when running LAMMPS to see the offending line.
++
++*/

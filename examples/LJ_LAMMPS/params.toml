@@ -1,0 +1,55 @@
+[global]
+
+    output_filename_prefix = "LJ_LAMMPS"
+    random_seed = 5
+
+    max_iter = 50000
+
+    stdout_report_interval_s = 60
+
+    snapshot_interval = 50000
+
+    [global.step_size_tune]
+
+        interval = 1000
+
+[ns]
+
+    n_walkers = 280
+    walk_length = 400
+    configs_module = "pymatnext.ns_configs.ase_atoms"
+
+    [ns.exit_conditions]
+        module = "pymatnext.loop_exit.Z_of_T"
+
+        [ns.exit_conditions.module_kwargs]
+            T_to_ns_quant = "kB"
+            T = 1200.0
+
+[configs]
+
+    composition = "H"
+    n_atoms = 16
+    initial_rand_vol_per_atom = 800.0
+    initial_rand_min_dist = 0.5
+
+    [configs.calculator]
+
+        type = "LAMMPS"
+        args.cmds = ["pair_style lj/cut 3.0", "pair_coeff * * 1.0 1.0", "pair_modify shift yes"]
+        args.types.1 = 1
+
+    [configs.walk]
+
+        gmc_traj_len = 8
+        cell_traj_len = 4
+
+        gmc_proportion = 1.0
+        cell_proportion = 1.5
+
+        [configs.walk.cell]
+
+            [configs.walk.cell.submove_probabilities]
+                volume = 0.33
+                shear = 0.33
+                stretch = 0.33

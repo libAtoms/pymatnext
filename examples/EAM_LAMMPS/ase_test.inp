@@ -1,0 +1,27 @@
+start_species=29 8, 13 8
+
+max_volume_per_atom = 800
+
+n_walkers=280
+n_cull=1
+n_iter_times_fraction_killed=160
+
+atom_algorithm=GMC
+n_model_calls_expected=400
+n_atom_steps=1
+atom_traj_len=8
+n_cell_volume_steps=4
+n_cell_shear_steps=4
+n_cell_stretch_steps=4
+n_swap_steps=8
+
+out_file_prefix=test_EAM_LAMMPSlib_16_K280_L400_GMC_c
+snapshot_interval=50000
+
+MC_cell_flat_V_prior=T
+# 0.1 GPa
+# MC_cell_P=6.24e-4
+MC_cell_min_aspect_ratio=0.8
+
+energy_calculator=ASE
+ASE_calc_module=EAM_LAMMPSlib
