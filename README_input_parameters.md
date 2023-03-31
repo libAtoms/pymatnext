@@ -1,0 +1,76 @@
+# comprehensive list of parameters in toml config file, with default values
+
+- [global]
+    - output_filename_prefix = NS
+    - random_seed = -1
+    - max_iter = -1
+    - stdout_report_interval_s = 60
+    - sample_interval = 1
+    - traj_interval = 100
+    - snapshot_interval = 10000
+    - [step_size_tune]
+        - interval = 1000
+        - n_configs = 1
+        - min_accept_rate = 0.25
+        - max_accept_rate = 0.5
+        - adjust_factor = 1.25
+- [ns] - see below
+- [configs] - see below
+
+- [ns]
+    - n_walkers = required <class 'int'>
+    - walk_length = required <class 'int'>
+    - configs_module = required <class 'str'>
+    - [exit_conditions] - see below
+
+- [ns.exit_conditions]
+    - module = _NONE_
+    - [module_kwargs]
+    -    variable content
+
+- [configs]
+    - full_composition = ""
+    - composition = required <class 'str'>
+    - n_atoms = required <class 'int'>
+    - dims = 3
+    - pbc = [True, True, True]
+    - initial_rand_vol_per_atom = required <class 'float'>
+    - initial_rand_min_dist = required <class 'float'>
+    - initial_rand_n_tries = 10
+    - [calculator]
+        - type = required <class 'str'>
+        - [args]
+        -    variable content
+    - [walk] - see below
+
+- [walk]
+    - gmc_traj_len = 8
+    - cell_traj_len = 8
+    - type_traj_len = 8
+    - gmc_proportion = 0.0
+    - cell_proportion = 0.0
+    - type_proportion = 0.0
+    - [max_step_size]
+        - pos_gmc_each_atom = -1.0
+        - cell_volume_per_atom = -1.0
+        - cell_shear = 0.2
+        - cell_stretch = 0.2
+    - [step_size]
+        - pos_gmc_each_atom = -1.0
+        - cell_volume_per_atom = -1.0
+        - cell_shear = -1.0
+        - cell_stretch = -1.0
+    - [cell]
+        - min_aspect_ratio = 0.8
+        - flat_V_prior = True
+        - pressure_GPa = 0.0
+        - pressure = None
+        - [submove_probabilities]
+            - volume = 0.7
+            - shear = 0.15
+            - stretch = 0.15
+    - [type]
+        - sGC = False
+        - [mu]
+        -    variable content
+

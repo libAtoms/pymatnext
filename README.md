@@ -73,6 +73,8 @@ Walks consist of blocks of a several steps of a single type (position or cell or
 
 see [here](README_usage.md)
 
+[complete parameters list](README_input_parameters.md)
+
 # Analysis
 
 see [here](README_analysis.md)
