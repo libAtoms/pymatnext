@@ -26,10 +26,9 @@
 - [ns.exit_conditions]
     - module = _NONE_
     - [module_kwargs]
-    -    variable content
+        - variable content
 
 - [configs]
-    - full_composition = ""
     - composition = required <class 'str'>
     - n_atoms = required <class 'int'>
     - dims = 3
@@ -40,7 +39,7 @@
     - [calculator]
         - type = required <class 'str'>
         - [args]
-        -    variable content
+            - variable content
     - [walk] - see below
 
 - [walk]
@@ -72,5 +71,5 @@
     - [type]
         - sGC = False
         - [mu]
-        -    variable content
+            - variable content
 

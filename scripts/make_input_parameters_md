@@ -10,7 +10,7 @@ def document_toml(d, depth, special_subsections=[]):
         if isinstance(v, dict):
             print(prefix + f"- [{k}]")
             if "_IGNORE_" in v:
-                print(prefix + "-    variable content")
+                print(prefix + "    - variable content")
             else:
                 document_toml(v, depth + 1, special_subsections=[s.replace(k + "/", "") for s in special_subsections])
         else:
