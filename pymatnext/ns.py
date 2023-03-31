@@ -533,7 +533,7 @@ class NS:
 
         # scatter or generate locals
         n_locals = self.comm.bcast(len(bit_generator_states["locals"]), root = 0)
-        print("BOB", n_locals, self.comm.size)
+        # print("BOB", n_locals, self.comm.size)
         if n_locals > self.comm.size:
             self.rng_local.bit_generator.state = self.comm.scatter(bit_generator_states["locals"][:self.comm.size], root=0)
         else:

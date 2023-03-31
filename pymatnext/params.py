@@ -48,7 +48,7 @@ def check_fill_defaults(params_section, defaults_section, label="top", verbose=F
 
             req_value = None
             try:
-                req = defaults_section[k][0] == "_REQ_"
+                req = len(defaults_section[k]) > 0 and defaults_section[k][0] == "_REQ_"
                 if req:
                     if len(defaults_section[k]) != 2:
                         raise ParamError(f"{label}: Key {k} got defaults _REQ_ but item has length {len(defaults_section[k])} != 2 {defaults_section[k]}")

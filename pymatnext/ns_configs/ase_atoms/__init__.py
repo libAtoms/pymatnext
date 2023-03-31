@@ -109,7 +109,11 @@ class NSConfig_ASE_Atoms():
         params: dict
             [configs] toml section
         """
-        cls._Zs, _ = cls._parse_composition(params.get("full_composition", params["composition"]))
+        check_fill_defaults(params, param_defaults_ase_atoms, label="configs")
+        full_composition = params["full_composition"]
+        if len(full_composition) == 0:
+            full_composition = params["composition"]
+        cls._Zs, _ = cls._parse_composition(full_composition)
 
         # NS quantity = internal energy + P V - \sum_i \mu_i N_i
         # cell volume

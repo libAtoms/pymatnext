@@ -2,7 +2,7 @@
 """
 
 param_defaults_ase_atoms = {
-    "full_composition": "AbCdE2",
+    "full_composition": "",
     "composition": ["_REQ_", "AbCdE2"],
     "n_atoms": ["_REQ_", 1],
     "dims": 3,
