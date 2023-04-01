@@ -176,9 +176,6 @@ def walk_cell(ns_atoms, Emax, rng):
     step_size_shear = ns_atoms.step_size["cell_shear"]
     step_size_stretch = ns_atoms.step_size["cell_stretch"]
 
-    # LAMMPS fix ns/cellmc doesn't support applied pressure (yet?)
-    assert ns_atoms.pressure == 0.0
-
     types, pos, vel = set_lammps_from_atoms(ns_atoms)
 
     Emax -= atoms.info["NS_energy_shift"]
@@ -187,7 +184,7 @@ def walk_cell(ns_atoms, Emax, rng):
     # NOTE: would it be faster to construct more of this command ahead of time?
     # would either still have to do step_sizes here, or recreate command
     # every time step sizes are changed
-    fix_cmd = (f"fix NS all ns/cellmc {lammps_seed} {Emax} {move_params_cell['min_aspect_ratio']} "
+    fix_cmd = (f"fix NS all ns/cellmc {lammps_seed} {Emax} {ns_atoms.pressure} {move_params_cell['min_aspect_ratio']} "
                f"{submove_probs['volume']} {step_size_volume} "
                f"{submove_probs['stretch']} {step_size_stretch} "
                f"{submove_probs['shear']} {step_size_shear} "

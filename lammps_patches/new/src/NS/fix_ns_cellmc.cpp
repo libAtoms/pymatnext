@@ -46,9 +46,9 @@ using namespace FixConst;
 FixNSCellMC::FixNSCellMC(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg)
 {
-  // args [fix ID group] 3..12 (3 walk, 6 step, 1? flat_V_prior)
-  // seed(i) Emax(d) min_aspect_ratio(d) pVol(d) dVol(d) pStretch(d) dStretch(d) pShear(d) dShear(d) [flat_V_prior(y/n)]
-  if (strcmp(style,"ns/cellmc") != 0 && narg != 3 + 3 + 6 && narg != 3 + 3 + 6 + 1)
+  // args [fix ID group] 3..12 (4 walk, 6 step, 1? flat_V_prior)
+  // seed(i) Emax(d) min_aspect_ratio(d) pressure(d) pVol(d) dVol(d) pStretch(d) dStretch(d) pShear(d) dShear(d) [flat_V_prior(y/n)]
+  if (strcmp(style,"ns/cellmc") != 0 && narg != 3 + 4 + 6 && narg != 3 + 4 + 6 + 1)
     error->all(FLERR,"Illegal number of args in fix ns/cellmc command");
 
   if (!domain->triclinic)
@@ -70,6 +70,7 @@ FixNSCellMC::FixNSCellMC(LAMMPS *lmp, int narg, char **arg) :
   seed = utils::inumeric(FLERR,arg[iarg++],true,lmp);
   Emax = utils::numeric(FLERR,arg[iarg++],true,lmp);
   min_aspect_ratio = utils::numeric(FLERR,arg[iarg++],true,lmp);
+  pressure = utils::numeric(FLERR,arg[iarg++],true,lmp);
 
   pVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
   dVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
@@ -78,7 +79,7 @@ FixNSCellMC::FixNSCellMC(LAMMPS *lmp, int narg, char **arg) :
   pShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
   dShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
   flat_V_prior = 1;
-  if (narg == 3+3+6+1) {
+  if (narg == 3+4+6+1) {
     if (strcmp(arg[iarg],"no") == 0) flat_V_prior = 0;
     else if (strcmp(arg[iarg],"yes") != 0)
       error->all(FLERR,"Illegal fix ns/cellmc flat_V_prior value");
@@ -143,6 +144,10 @@ void FixNSCellMC::init()
   if (strstr(update->integrate_style,"respa"))
     error->all(FLERR,"fix ns/cellmc not compatible with RESPA");
 
+  // need to accumulate dPV relative to run-initial volume, since
+  // Emax is shifted based on that initial, fixed volume
+  cumulative_dPV = 0.0;
+
 }
 
 void FixNSCellMC::initial_integrate(int vflag)
@@ -172,6 +177,10 @@ void FixNSCellMC::initial_integrate(int vflag)
 
   last_move_type = MOVE_UNDEF;
   move_rejected_early = false;
+
+  // keep track of change PV in this step
+  // default to 0, set otherwise when volume move is selected
+  dPV = 0.0;
 
   // default to accept, will be changed below to reject (-1.0) or probablistic (if flat_V_prior != 1)
   double rv = random->uniform();
@@ -212,6 +221,7 @@ void FixNSCellMC::initial_integrate(int vflag)
         new_cell[2][0] = domain->xz * transform_diag;
         new_cell[2][1] = domain->yz * transform_diag;
         new_cell[2][2] = boxext[2] * transform_diag;
+        dPV = pressure * dV
       }
     }
   } else if (rv < pStretch) {
@@ -359,10 +369,14 @@ void FixNSCellMC::final_integrate()
     return;
   }
 
-  if (ecurrent >= Emax) {
+  // if potential energy - d(P V) is above Emax then reject move
+  // need to include previous steps' cumulative dPV contributions, as well as current ones
+  if (ecurrent - cumulative_dPV - dPV >= Emax) {
 #ifdef DEBUG
-    std::cout << "REJECT E == " << ecurrent << " >= Emax == " << Emax << std::endl;
+    std::cout << "REJECT E == " << ecurrent << " - " << cumulative_dPV + dPV << " >= Emax == " << Emax << std::endl;
 #endif
+    // reject move, so don't touch cumulative_dPV, since type change that led to current dPV was reverted
+
     for (int i=0; i < 3; i++) {
       domain->boxlo[i] = prev_boxlo[i];
       domain->boxhi[i] = prev_boxhi[i];
@@ -381,6 +395,8 @@ void FixNSCellMC::final_integrate()
         x[iat][j] = prevx[iat][j];
 
   } else {
+    // accept move, so accumulate dPV contribution from this step
+    cumulative_dPV += dPV;
     switch (last_move_type) {
         case MOVE_VOL:
             n_success_vol++;
@@ -405,7 +421,7 @@ new_cell[1][2] = 0.0;
 new_cell[2][0] = domain->xz;
 new_cell[2][1] = domain->yz;
 new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
-    std::cout << "ACCEPT E == " << ecurrent << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
+    std::cout << "ACCEPT E == " << ecurrent " - " << cumulative_dPV << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
     // std::cout << "final cell " << new_cell[0][0] << " " << new_cell[0][1] << " " << new_cell[0][2] << std::endl;
     // std::cout << "           " << new_cell[1][0] << " " << new_cell[1][1] << " " << new_cell[1][2] << std::endl;
     // std::cout << "           " << new_cell[2][0] << " " << new_cell[2][1] << " " << new_cell[2][2] << std::endl;
