@@ -571,8 +571,9 @@ class NSConfig_ASE_Atoms():
         header_dict = { "n_extra_DOF_per_atom": 3,
                         "pressure": self.pressure,
                         "flat_V_prior": self.move_params["cell"]["flat_V_prior"],
-                        "extras": [ "volume", "natoms"] + [f"x_{Z}" for Z in self._Zs] if len(self._Zs) > 1 else [] }
+                        "extras": [ "volume", "natoms"] + ([f"x_{Z}" for Z in self._Zs] if len(self._Zs) > 1 else []) }
 
+        print("BOB NSConfigs_ASE_Atoms returning header_dict", header_dict)
         return header_dict
 
 
