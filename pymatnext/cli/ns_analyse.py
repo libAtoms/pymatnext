@@ -49,7 +49,7 @@ def main():
     p.add_argument('--plot_together_filenames', action='store_true', help="""show filenames in combined plot""")
     p.add_argument('--plot_twinx_spacing', type=float, help="""spacing for extra twinx y axes""", default=0.15)
     p.add_argument('--quiet', '-q', action='store_true', help="""No progress output""")
-    p.add_argument('infile', nargs='+', help="""input energies file""")
+    p.add_argument('infile', nargs='+', help="""input energies file, or old analysis files for replotting only (all actual analysis flags will be ignore)""")
 
     args = p.parse_args()
 
@@ -100,37 +100,50 @@ def main():
         vals = []
         analysis_header = None
         with open(infile) as fin:
+            # find header, either real data or previous analysis
             for l in fin:
                 if l.startswith('#'):
                     try:
-                        analysis_header = json.loads(l[1:])
-                        n_walkers = "UNKNOWN"
-                        n_cull = "UNKNOWN"
-                        break
+                        header = json.loads(l[1:])
+                        if isinstance(header, list):
+                            analysis_header = header
+                            header = None
+                            n_walkers = "UNKNOWN"
+                            n_cull = "UNKNOWN"
+                            break
+                        elif isinstance(header, dict):
+                            break
+                        # ignore other lines that happens to be json-parsable
                     except json.decoder.JSONDecodeError:
                         pass
-
-                    continue
                 else:
+                    # past # header lines
                     break
 
+            if header is None and analysis_header is None:
+                raise ValueError(f"File {infile} appears to have no json-parseable header")
+
             if analysis_header is None:
-                header = json.loads(l)
+                # read real sampled data
                 for l_i, l in enumerate(fin):
                     if args.line_end is not None and l_i >= args.line_end:
                         break
                     if l_i < args.line_skip or l_i % args.interval != 0:
                         continue
                     f = l.split()
-                    try:
-                        it = int(f[0])
-                        vals_line = [float(v) for v in f[1:]]
-                        iters.append(it)
-                        Es.append(vals_line[0])
-                        vals.append(vals_line[1:])
-                    except:
-                        # skip malformed lines
-                        pass
+                    ## should we ignore certain kinds of malformed lines?
+                    ## try:
+                    it = int(f[0])
+                    vals_line = [float(v) for v in f[1:]]
+
+                    if l_i == 0 and len(vals_line) != 1 + len(header["extras"]):
+                        raise ValueError(f"Expecting 1 + {len(header['extras'])} extra fields, but got {len(vals_line)} on first line, refusing to continue")
+
+                    iters.append(it)
+                    Es.append(vals_line[0])
+                    vals.append(vals_line[1:])
+                    ## except:
+                        ## pass
 
         if analysis_header is None:
 
