@@ -1,20 +1,7 @@
-diff -N -u -r orig/cmake/CMakeLists.txt new/cmake/CMakeLists.txt
---- orig/cmake/CMakeLists.txt	2022-12-01 11:18:57.828364685 -0500
-+++ new/cmake/CMakeLists.txt	2022-12-01 11:18:06.205920258 -0500
-@@ -297,7 +297,8 @@
-   UEF
-   VORONOI
-   VTK
--  YAFF)
-+  YAFF
-+  NS)
- 
- set(SUFFIX_PACKAGES CORESHELL GPU KOKKOS OPT INTEL OPENMP)
- 
 diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 --- orig/src/NS/fix_ns_cellmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.cpp	2021-10-29 13:44:33.723143736 -0400
-@@ -0,0 +1,458 @@
++++ new/src/NS/fix_ns_cellmc.cpp	2023-04-03 08:16:30.856268936 -0400
+@@ -0,0 +1,474 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
 +   http://lammps.sandia.gov, Sandia National Laboratories
@@ -63,9 +50,9 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +FixNSCellMC::FixNSCellMC(LAMMPS *lmp, int narg, char **arg) :
 +  Fix(lmp, narg, arg)
 +{
-+  // args [fix ID group] 3..12 (3 walk, 6 step, 1? flat_V_prior)
-+  // seed(i) Emax(d) min_aspect_ratio(d) pVol(d) dVol(d) pStretch(d) dStretch(d) pShear(d) dShear(d) [flat_V_prior(y/n)]
-+  if (strcmp(style,"ns/cellmc") != 0 && narg != 3 + 3 + 6 && narg != 3 + 3 + 6 + 1)
++  // args [fix ID group] 3..12 (4 walk, 6 step, 1? flat_V_prior)
++  // seed(i) Emax(d) min_aspect_ratio(d) pressure(d) pVol(d) dVol(d) pStretch(d) dStretch(d) pShear(d) dShear(d) [flat_V_prior(y/n)]
++  if (strcmp(style,"ns/cellmc") != 0 && narg != 3 + 4 + 6 && narg != 3 + 4 + 6 + 1)
 +    error->all(FLERR,"Illegal number of args in fix ns/cellmc command");
 +
 +  if (!domain->triclinic)
@@ -87,6 +74,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +  seed = utils::inumeric(FLERR,arg[iarg++],true,lmp);
 +  Emax = utils::numeric(FLERR,arg[iarg++],true,lmp);
 +  min_aspect_ratio = utils::numeric(FLERR,arg[iarg++],true,lmp);
++  pressure = utils::numeric(FLERR,arg[iarg++],true,lmp);
 +
 +  pVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
 +  dVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
@@ -95,7 +83,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +  pShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
 +  dShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
 +  flat_V_prior = 1;
-+  if (narg == 3+3+6+1) {
++  if (narg == 3+4+6+1) {
 +    if (strcmp(arg[iarg],"no") == 0) flat_V_prior = 0;
 +    else if (strcmp(arg[iarg],"yes") != 0)
 +      error->all(FLERR,"Illegal fix ns/cellmc flat_V_prior value");
@@ -160,6 +148,10 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +  if (strstr(update->integrate_style,"respa"))
 +    error->all(FLERR,"fix ns/cellmc not compatible with RESPA");
 +
++  // need to accumulate dPV relative to run-initial volume, since
++  // Emax is shifted based on that initial, fixed volume
++  cumulative_dPV = 0.0;
++
 +}
 +
 +void FixNSCellMC::initial_integrate(int vflag)
@@ -189,6 +181,10 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +
 +  last_move_type = MOVE_UNDEF;
 +  move_rejected_early = false;
++
++  // keep track of change PV in this step
++  // default to 0, set otherwise when volume move is selected
++  dPV = 0.0;
 +
 +  // default to accept, will be changed below to reject (-1.0) or probablistic (if flat_V_prior != 1)
 +  double rv = random->uniform();
@@ -229,6 +225,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +        new_cell[2][0] = domain->xz * transform_diag;
 +        new_cell[2][1] = domain->yz * transform_diag;
 +        new_cell[2][2] = boxext[2] * transform_diag;
++        dPV = pressure * dV;
 +      }
 +    }
 +  } else if (rv < pStretch) {
@@ -376,10 +373,14 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +    return;
 +  }
 +
-+  if (ecurrent >= Emax) {
++  // if potential energy - d(P V) is above Emax then reject move
++  // need to include previous steps' cumulative dPV contributions, as well as current ones
++  if (ecurrent - cumulative_dPV - dPV >= Emax) {
 +#ifdef DEBUG
-+    std::cout << "REJECT E == " << ecurrent << " >= Emax == " << Emax << std::endl;
++    std::cout << "REJECT E == " << ecurrent << " - " << cumulative_dPV + dPV << " >= Emax == " << Emax << std::endl;
 +#endif
++    // reject move, so don't touch cumulative_dPV, since type change that led to current dPV was reverted
++
 +    for (int i=0; i < 3; i++) {
 +      domain->boxlo[i] = prev_boxlo[i];
 +      domain->boxhi[i] = prev_boxhi[i];
@@ -398,6 +399,8 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +        x[iat][j] = prevx[iat][j];
 +
 +  } else {
++    // accept move, so accumulate dPV contribution from this step
++    cumulative_dPV += dPV;
 +    switch (last_move_type) {
 +        case MOVE_VOL:
 +            n_success_vol++;
@@ -422,7 +425,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +new_cell[2][0] = domain->xz;
 +new_cell[2][1] = domain->yz;
 +new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
-+    std::cout << "ACCEPT E == " << ecurrent << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
++    std::cout << "ACCEPT E == " << ecurrent " - " << cumulative_dPV << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
 +    // std::cout << "final cell " << new_cell[0][0] << " " << new_cell[0][1] << " " << new_cell[0][2] << std::endl;
 +    // std::cout << "           " << new_cell[1][0] << " " << new_cell[1][1] << " " << new_cell[1][2] << std::endl;
 +    // std::cout << "           " << new_cell[2][0] << " " << new_cell[2][1] << " " << new_cell[2][2] << std::endl;
@@ -475,8 +478,8 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 --- orig/src/NS/fix_ns_cellmc.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.h	2021-10-27 09:53:55.213983419 -0400
-@@ -0,0 +1,72 @@
++++ new/src/NS/fix_ns_cellmc.h	2023-04-01 17:15:39.278299788 -0400
+@@ -0,0 +1,74 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
 +   http://lammps.sandia.gov, Sandia National Laboratories
@@ -519,13 +522,15 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 +  double prev_boxlo[3], prev_boxhi[3], prev_xy, prev_yz, prev_xz;
 +  int seed;
 +  double Emax;
-+  double min_aspect_ratio;
++  double min_aspect_ratio, pressure;
 +  int flat_V_prior;
 +  class RanMars *random;
 +  double pVol, dVol, pStretch, dStretch, pShear, dShear;
 +  int peflag;
 +  char *id_pe;
 +  char str[64];
++
++  double dPV, cumulative_dPV;
 +
 +  bool move_rejected_early;
 +  int last_move_type;
@@ -551,7 +556,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns_gmc.cpp new/src/NS/fix_ns_gmc.cpp
 --- orig/src/NS/fix_ns_gmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_gmc.cpp	2021-10-27 09:53:55.215983401 -0400
++++ new/src/NS/fix_ns_gmc.cpp	2022-12-08 17:17:01.000000000 -0500
 @@ -0,0 +1,201 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -756,7 +761,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.cpp new/src/NS/fix_ns_gmc.cpp
 +
 diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 --- orig/src/NS/fix_ns_gmc.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_gmc.h	2021-10-26 22:43:21.969174377 -0400
++++ new/src/NS/fix_ns_gmc.h	2022-12-08 17:17:01.000000000 -0500
 @@ -0,0 +1,61 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -821,7 +826,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 --- orig/src/NS/fix_ns_type.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.cpp	2021-11-03 12:50:02.815940067 -0400
++++ new/src/NS/fix_ns_type.cpp	2023-04-01 17:14:14.838079400 -0400
 @@ -0,0 +1,341 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -1166,7 +1171,7 @@ diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_type.h new/src/NS/fix_ns_type.h
 --- orig/src/NS/fix_ns_type.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.h	2021-10-29 13:36:52.548950547 -0400
++++ new/src/NS/fix_ns_type.h	2022-12-08 17:17:01.000000000 -0500
 @@ -0,0 +1,70 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator

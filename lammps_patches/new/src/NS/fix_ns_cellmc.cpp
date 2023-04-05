@@ -221,7 +221,7 @@ void FixNSCellMC::initial_integrate(int vflag)
         new_cell[2][0] = domain->xz * transform_diag;
         new_cell[2][1] = domain->yz * transform_diag;
         new_cell[2][2] = boxext[2] * transform_diag;
-        dPV = pressure * dV
+        dPV = pressure * dV;
       }
     }
   } else if (rv < pStretch) {
