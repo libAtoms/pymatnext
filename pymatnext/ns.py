@@ -339,6 +339,7 @@ class NS:
                 else:
                     self.local_configs[0].copy_contents(ns_config)
 
+                self.local_configs[0].reset_walk_counters()
                 accept_freq_contribution = self.local_configs[0].walk(self.max_val, self.local_walk_length, self.rng_local)
                 accept_freq += np.asarray(accept_freq_contribution)
 
@@ -346,7 +347,7 @@ class NS:
 
             if first_iter and self.comm.rank == 0:
                 for name, size, max_size, freq in zip(step_size_names, self.local_configs[0].step_size.values(), max_step_size, accept_freq):
-                    print("step_size_tune initial", name, size, max_size, freq)
+                    print("step_size_tune initial", name, "size", size, "max", max_size, "freq", freq)
                 first_iter = False
 
             done = []
@@ -374,7 +375,7 @@ class NS:
                 break
 
             if any(np.asarray(step_size) < 1.0e-12):
-                raise RuntimeError(f"Stepsize got too small with automatic tuning {step_size}")
+                raise RuntimeError(f"Stepsize got too small with automatic tuning {step_size} {step_size_names}")
 
         if self.comm.rank == 0:
             for name, size in zip(step_size_names, self.local_configs[0].step_size.values()):
@@ -529,15 +530,15 @@ class NS:
             bit_generator_states = {"global": None, "locals": []}
 
         # bcast globals
-        self.rng_global.bit_generator.state = self.comm.bcast(bit_generator_states["global"], root=0)
+        new_state = self.comm.bcast(bit_generator_states["global"], root=0)
+        self.rng_global.bit_generator.state = new_state
 
         # scatter or generate locals
         n_locals = self.comm.bcast(len(bit_generator_states["locals"]), root = 0)
-        # print("BOB", n_locals, self.comm.size)
-        if n_locals > self.comm.size:
+        if n_locals == self.comm.size:
             self.rng_local.bit_generator.state = self.comm.scatter(bit_generator_states["locals"][:self.comm.size], root=0)
         else:
-            # need more local generators than we have,generate all from global rng
+            # number of read-in generators doesn't match number needed, start over by generating all from global rng
             self.rng_global, self.rng_local = new_rngs(self.comm.rank, None, self.rng_global)
 
 

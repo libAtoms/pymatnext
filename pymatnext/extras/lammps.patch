@@ -1,6 +1,6 @@
 diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 --- orig/src/NS/fix_ns_cellmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.cpp	2023-04-03 08:16:30.856268936 -0400
++++ new/src/NS/fix_ns_cellmc.cpp	2023-04-06 12:03:21.386180157 -0400
 @@ -0,0 +1,474 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -375,9 +375,9 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +
 +  // if potential energy - d(P V) is above Emax then reject move
 +  // need to include previous steps' cumulative dPV contributions, as well as current ones
-+  if (ecurrent - cumulative_dPV - dPV >= Emax) {
++  if (ecurrent + cumulative_dPV + dPV >= Emax) {
 +#ifdef DEBUG
-+    std::cout << "REJECT E == " << ecurrent << " - " << cumulative_dPV + dPV << " >= Emax == " << Emax << std::endl;
++    std::cout << "REJECT E == " << ecurrent << " + " << cumulative_dPV + dPV << " >= Emax == " << Emax << std::endl;
 +#endif
 +    // reject move, so don't touch cumulative_dPV, since type change that led to current dPV was reverted
 +
@@ -425,7 +425,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +new_cell[2][0] = domain->xz;
 +new_cell[2][1] = domain->yz;
 +new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
-+    std::cout << "ACCEPT E == " << ecurrent " - " << cumulative_dPV << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
++    std::cout << "ACCEPT E == " << ecurrent " + " << cumulative_dPV << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
 +    // std::cout << "final cell " << new_cell[0][0] << " " << new_cell[0][1] << " " << new_cell[0][2] << std::endl;
 +    // std::cout << "           " << new_cell[1][0] << " " << new_cell[1][1] << " " << new_cell[1][2] << std::endl;
 +    // std::cout << "           " << new_cell[2][0] << " " << new_cell[2][1] << " " << new_cell[2][2] << std::endl;
@@ -478,7 +478,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 --- orig/src/NS/fix_ns_cellmc.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.h	2023-04-01 17:15:39.278299788 -0400
++++ new/src/NS/fix_ns_cellmc.h	2023-04-04 21:47:03.744996335 -0400
 @@ -0,0 +1,74 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -826,7 +826,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 --- orig/src/NS/fix_ns_type.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.cpp	2023-04-01 17:14:14.838079400 -0400
++++ new/src/NS/fix_ns_type.cpp	2023-04-06 12:03:37.722019077 -0400
 @@ -0,0 +1,341 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -1093,9 +1093,9 @@ diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 +
 +  // if potential energy + d(mu N) is above Emax then reject move
 +  // need to include previous steps' cumulative dmuN contributions, as well as current ones
-+  if (ecurrent + cumulative_dmuN + dmuN >= Emax) {
++  if (ecurrent - cumulative_dmuN - dmuN >= Emax) {
 +#ifdef DEBUG
-+    std::cout << "REJECT E == " << ecurrent << " + " << cumulative_dmuN + dmuN << " >= Emax == " << Emax << " " << std::endl;
++    std::cout << "REJECT E == " << ecurrent << " - " << cumulative_dmuN + dmuN << " >= Emax == " << Emax << " " << std::endl;
 +#endif
 +    // reject move, so don't touch cumulative_dmuN, since type change that led to current dmuN was reverted
 +

@@ -32,7 +32,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         # step and evaluate new energy, forces
         atoms.positions += atoms.arrays["NS_velocities"]
         atoms.calc.calculate(atoms, properties=["free_energy", "forces"])
-        E = atoms.calc.results["free_energy"]
+        E = atoms.calc.results.get("free_energy", atoms.calc.results.get("energy"))
         F = atoms.calc.results["forces"]
 
         if E >= Emax: # reflect or fail
@@ -93,7 +93,7 @@ def _eval_and_accept_or_signal_revert(atoms, Emax, delta_PV=0.0, delta_muN=0.0):
     revert: bool, True if move is rejected and must be reverted
     """
     atoms.calc.calculate(atoms, properties=["free_energy", "forces"])
-    E = atoms.calc.results["free_energy"]
+    E = atoms.calc.results.get("free_energy", atoms.calc.results.get("energy"))
     E_shift = atoms.info["NS_energy_shift"] + delta_PV - delta_muN
     if E + E_shift < Emax:
         # accept can happen here, because it's always the same action

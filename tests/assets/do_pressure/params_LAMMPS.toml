@@ -1,9 +1,9 @@
 [global]
 
-    output_filename_prefix = "LJ_ASE"
+    output_filename_prefix = "LAMMPS_pressure"
     random_seed = 5
 
-    max_iter = 100
+    max_iter = 500
 
     stdout_report_interval_s = 10
 
@@ -11,11 +11,11 @@
 
     [global.step_size_tune]
 
-        interval = 1000
+        interval = 200
 
 [ns]
 
-    n_walkers = 280
+    n_walkers = 70
     walk_length = 400
     configs_module = "pymatnext.ns_configs.ase_atoms"
 
@@ -28,8 +28,13 @@
 
     [configs.calculator]
 
-        type = "ASE"
-        args.module = "examples.LJ_ASE.LJ"
+        type = "LAMMPS"
+
+        [configs.calculator.args]
+
+            cmds = ["pair_style morse 2.7", "pair_coeff * * 1.0 6.0 1.0"]
+
+            types.1 = 1
 
     [configs.walk]
 
@@ -41,7 +46,7 @@
 
         [configs.walk.cell]
 
-            pressure_GPa = 0.1
+            pressure_GPa = 150.0
 
             [configs.walk.cell.submove_probabilities]
                 volume = 0.33

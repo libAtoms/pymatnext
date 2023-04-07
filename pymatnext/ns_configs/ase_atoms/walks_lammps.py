@@ -4,6 +4,24 @@ import numpy as np
 
 import lammps
 
+# avoiding every lammps fix from having to do the full energy shift is useful
+# we want
+#   E + P V - mu N < Emax
+# therefore, we modify Emax passed to lammps defining Emax^lammps, with V0 and N0 
+#        defined as the initial volume and species numbers
+#   E < Emax - P V0 + mu N0 = Emax^lammps
+# this is sufficient for position moves, where V and N don't change
+#
+# for volume changes, we want
+#   E + P (V0 + dV) - mu N0 < Emax
+# where dV is the cumulative difference of the current steps' volume and the step where
+#        the fix trajectory started
+#   E < Emax - P (V0 + dV) + mu N0
+#   E < Emax - P V0 + mu N0 - P dV
+#   E < Emax^lammps - P dV
+# which is equivalent to
+#   E + P dV < Emax^lammps
+
 def set_lammps_from_atoms(ns_atoms):
     """set lammps internal configuration data (cell, types, positions, velocities) from
     ns_atoms object
@@ -184,7 +202,7 @@ def walk_cell(ns_atoms, Emax, rng):
     # NOTE: would it be faster to construct more of this command ahead of time?
     # would either still have to do step_sizes here, or recreate command
     # every time step sizes are changed
-    fix_cmd = (f"fix NS all ns/cellmc {lammps_seed} {Emax} {ns_atoms.pressure} {move_params_cell['min_aspect_ratio']} "
+    fix_cmd = (f"fix NS all ns/cellmc {lammps_seed} {Emax} {move_params_cell['min_aspect_ratio']} {ns_atoms.pressure} "
                f"{submove_probs['volume']} {step_size_volume} "
                f"{submove_probs['stretch']} {step_size_stretch} "
                f"{submove_probs['shear']} {step_size_shear} "
