@@ -9,3 +9,5 @@ __pycache__
 *.NS_samples
 job.*
 lammps.log
+*.egg-info
+build

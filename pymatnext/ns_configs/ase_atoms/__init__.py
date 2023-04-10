@@ -14,6 +14,7 @@ import ase.io
 import ase.units
 from ase.atoms import Atoms
 from ase.neighborlist import neighbor_list
+from ase.calculators.calculator import all_changes
 
 from .atoms_contig_store import AtomsContiguousStorage
 
@@ -439,7 +440,7 @@ class NSConfig_ASE_Atoms():
         each species (if constant chemical potential)
         """
         if self.calc_type == "ASE":
-            self.calc.calculate(self.atoms, properties=["free_energy", "forces"])
+            self.calc.calculate(self.atoms, properties=["free_energy", "forces"], system_changes=all_changes)
             self.atoms.info["NS_energy"][...] = self.calc.results.get("free_energy", self.calc.results.get("energy"))
             self.atoms.arrays["NS_forces"][...] = self.calc.results["forces"]
         elif self.calc_type == "LAMMPS":

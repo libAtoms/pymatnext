@@ -1,5 +1,7 @@
 import warnings
 
+from ase.calculators.calculator import all_changes
+
 import numpy as np
 
 one_third = 1.0/3.0
@@ -23,7 +25,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
 
     # below here operate only on _internal_ energy, without any "+ P V - mu N" shifts
     Emax -= atoms.info["NS_energy_shift"]
-    atoms.calc.calculate(atoms, properties=["free_energy", "forces"])
+    atoms.calc.calculate(atoms, properties=["free_energy", "forces"], system_changes=all_changes)
 
     # store orig position in case move is rejected
     atoms.prev_positions[...] = atoms.positions
@@ -31,7 +33,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
     for i_step in range(ns_atoms.walk_traj_len["gmc"]):
         # step and evaluate new energy, forces
         atoms.positions += atoms.arrays["NS_velocities"]
-        atoms.calc.calculate(atoms, properties=["free_energy", "forces"])
+        atoms.calc.calculate(atoms, properties=["free_energy", "forces"], system_changes=all_changes)
         E = atoms.calc.results.get("free_energy", atoms.calc.results.get("energy"))
         F = atoms.calc.results["forces"]
 
@@ -92,7 +94,7 @@ def _eval_and_accept_or_signal_revert(atoms, Emax, delta_PV=0.0, delta_muN=0.0):
     -------
     revert: bool, True if move is rejected and must be reverted
     """
-    atoms.calc.calculate(atoms, properties=["free_energy", "forces"])
+    atoms.calc.calculate(atoms, properties=["free_energy", "forces"], system_changes=all_changes)
     E = atoms.calc.results.get("free_energy", atoms.calc.results.get("energy"))
     E_shift = atoms.info["NS_energy_shift"] + delta_PV - delta_muN
     if E + E_shift < Emax:
@@ -208,7 +210,7 @@ def walk_type(ns_atoms, Emax, rng):
     N_atoms = len(atoms)
     sGC = ns_atoms.move_params["type"]["sGC"]
     if sGC:
-        Zs = ns_atoms.Zs
+        Zs = list(ns_atoms._Zs)
         n_Zs = len(Zs)
     else:
         # check that swaps are possible, otherwise give up early

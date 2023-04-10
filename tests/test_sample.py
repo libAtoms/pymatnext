@@ -35,6 +35,10 @@ def test_EAM_LAMMPS_no_mpi(tmp_path, monkeypatch):
 def test_pressure_no_mpi(tmp_path, monkeypatch):
     do_pressure(tmp_path, monkeypatch, using_mpi=False)
 
+@pytest.mark.mpi_skip
+def test_sGC_no_mpi(tmp_path, monkeypatch):
+    do_sGC(tmp_path, monkeypatch, using_mpi=False)
+
 # tests with MPI
 
 @pytest.mark.mpi
@@ -52,6 +56,10 @@ def test_EAM_LAMMPS_mpi(mpi_tmp_path, monkeypatch):
 @pytest.mark.mpi
 def test_pressure_mpi(mpi_tmp_path, monkeypatch):
     do_pressure(mpi_tmp_path, monkeypatch, using_mpi=True)
+
+@pytest.mark.mpi
+def test_sGC_mpi(mpi_tmp_path, monkeypatch):
+    do_sGC(mpi_tmp_path, monkeypatch, using_mpi=True)
 
 
 def do_Morse_ASE_restart(tmp_path, monkeypatch, using_mpi):
@@ -234,6 +242,7 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
         print("final line ref ", fields_ref)
         assert False
 
+
 def do_pressure(tmp_path, monkeypatch, using_mpi):
     if using_mpi:
         from mpi4py import MPI
@@ -283,3 +292,61 @@ def do_pressure(tmp_path, monkeypatch, using_mpi):
         Vfirst = float(lfirst.strip().split()[2])
         Vlast = float(llast.strip().split()[2])
         assert Vfirst / Vlast > 20
+
+
+def do_sGC(tmp_path, monkeypatch, using_mpi):
+    if using_mpi:
+        from mpi4py import MPI
+        if MPI.COMM_WORLD.size != 2:
+            pytest.skip("do_sGC with MPI only works for comm.size == 2")
+
+    assets_dir = Path(__file__).parent  / 'assets' / 'do_sGC'
+
+    toml_files = ['params_matscipy.toml']
+    if lammps is not None:
+        toml_files += ['params_LAMMPS.toml']
+
+    for toml_file in toml_files:
+        with open(assets_dir / toml_file) as fin, open(tmp_path / toml_file, 'w') as fout:
+            for l in fin:
+                # rewrite to find potentials in right place
+                if "_POTENTIAL_DIR_" in l:
+                    fout.write(l.replace("_POTENTIAL_DIR_", str(assets_dir.resolve())))
+                    continue
+
+                # fix output_filename_prefix so everything is written to tmp_path
+                if "output_filename_prefix" in l:
+                    fout.write(f'output_filename_prefix = "{tmp_path}/{toml_file}"\n')
+                    continue
+
+                fout.write(l)
+
+        # add assets dir for Morse.py  module
+        sys.path.insert(0, str(assets_dir))
+        # add assets dir for Morse.py  module
+        if not using_mpi:
+            # need PYMATNEXT_NO_MPI since otherwise rngs will vary depending on number of MPI processes, and 
+            # numbers in output will vary
+            monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
+
+        main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+                     str(tmp_path / toml_file)]
+
+        sample.main(main_args, mpi_finalize=False)
+        del sys.path[0]
+
+        with open(tmp_path / (toml_file + ".test.NS_samples")) as fin:
+            lfirst = None
+            for l in fin:
+                if l.startswith("#"):
+                    continue
+
+                if lfirst is None:
+                    lfirst = l
+            llast = l
+
+        f_13_first, f_29_first = [float(f) for f in lfirst.strip().split()[4:6]]
+        f_13_last, f_29_last = [float(f) for f in llast.strip().split()[4:6]]
+
+        assert f_29_first / f_13_first == 1.0
+        assert f_29_last / f_13_last > 5

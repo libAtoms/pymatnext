@@ -1,6 +1,6 @@
 diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 --- orig/src/NS/fix_ns_cellmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.cpp	2023-04-06 12:03:21.386180157 -0400
++++ new/src/NS/fix_ns_cellmc.cpp	2023-04-07 08:24:10.058143227 -0400
 @@ -0,0 +1,474 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -826,7 +826,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 --- orig/src/NS/fix_ns_type.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.cpp	2023-04-06 12:03:37.722019077 -0400
++++ new/src/NS/fix_ns_type.cpp	2023-04-10 16:27:13.950098439 -0400
 @@ -0,0 +1,341 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -897,7 +897,7 @@ diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 +  semi_GC_flag = 1;
 +  if (strcmp(arg[iarg],"no") == 0) semi_GC_flag = 0;
 +  else if (strcmp(arg[iarg],"yes") != 0)
-+    error->all(FLERR,"Illegal fix ns/type flat_V_prior value");
++    error->all(FLERR,"Illegal fix ns/type semi_GC_flag value");
 +  iarg++;
 +
 +  if (semi_GC_flag) {
@@ -1025,7 +1025,7 @@ diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 +    rv = random_l->uniform();
 +    int dtype = 1 + static_cast<int>(rv * (ntypes-1)) % (ntypes-1);
 +    int new_type = 1 + (((type[atom_0]-1) + dtype) % ntypes);
-+    dmuN = mu[type[atom_0]-1] - mu[new_type-1];
++    dmuN = mu[new_type-1] - mu[type[atom_0]-1];
 +    type[atom_0] = new_type;
 +#ifdef DEBUG
 +    std::cout << "SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " <<

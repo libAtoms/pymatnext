@@ -1,0 +1,60 @@
+[global]
+
+    output_filename_prefix = "EAM_LAMMPS_sGC"
+    random_seed = 5
+
+    max_iter = 500
+
+    stdout_report_interval_s = 10
+
+    snapshot_interval = 50
+
+    [global.step_size_tune]
+
+        interval = 200
+
+[ns]
+
+    n_walkers = 70
+    walk_length = 400
+    configs_module = "pymatnext.ns_configs.ase_atoms"
+
+[configs]
+
+    composition = "AlCu"
+    n_atoms = 16
+    initial_rand_vol_per_atom = 800.0
+    initial_rand_min_dist = 0.5
+
+    [configs.calculator]
+
+        type = "LAMMPS"
+
+        [configs.calculator.args]
+
+            cmds = ["pair_style eam/alloy", "pair_coeff * * _POTENTIAL_DIR_/AlCu_Zhou04.eam.alloy Al Cu"]
+
+            types.13 = 1
+            types.29 = 2
+
+    [configs.walk]
+
+        gmc_traj_len = 8
+        cell_traj_len = 4
+        type_traj_len = 8
+
+        gmc_proportion = 1.0
+        cell_proportion = 1.5
+        type_proportion = 1.0
+
+        [configs.walk.cell]
+
+            [configs.walk.cell.submove_probabilities]
+                volume = 0.33
+                shear = 0.33
+                stretch = 0.33
+
+        [configs.walk.type]
+            sGC = true
+            mu.13 = 0.0
+            mu.29 = 30.0
