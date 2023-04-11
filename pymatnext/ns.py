@@ -525,7 +525,7 @@ class NS:
         """
         if self.comm.rank == 0:
             if len(bit_generator_states["locals"]) != self.comm.size and not different_nlocal:
-                raise RuntimeError(f"Got local rngs states from {len(bit_generator_states['locals'])} procs, but current number if {comm.size}")
+                raise RuntimeError(f"Got local rngs states for {len(bit_generator_states['locals'])} procs, but current number is {self.comm.size}")
         else:
             bit_generator_states = {"global": None, "locals": []}
 

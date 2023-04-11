@@ -305,7 +305,7 @@ class NSConfig_ASE_Atoms():
                     assert self.Z_of_type[self.type_of_Z[Z]] != 0
 
         else:
-            raise NotImplementedError(f"Unknown calculator type {calc_type}")
+            raise NotImplementedError(f"Unknown calculator type {self.calc_type}")
 
         # calculate energy/forces and save values
         self.initial_calc_and_store()
