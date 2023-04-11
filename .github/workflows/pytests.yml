@@ -60,9 +60,9 @@ jobs:
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
-          flake8 wfl/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 pymatnext/ --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings.
-          flake8 wfl/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+          flake8 pymatnext/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
 
       - name: Test with pytest - plain
         if: env.coverage-on-version != matrix.python-version
@@ -78,7 +78,7 @@ jobs:
           rm -rf $HOME/pytest_cov
           mkdir $HOME/pytest_cov
           #
-          pytest -v --cov=wfl --cov-report term --cov-report html --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --runremote --basetemp $HOME/pytest_cov -rxXs
+          pytest -v --cov=pymatnext --cov-report term --cov-report html --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --runremote --basetemp $HOME/pytest_cov -rxXs
 
       # # DEBUGGING
       # - name: Setup tmate session
@@ -96,7 +96,7 @@ jobs:
         if: ${{ env.use-mpi && env.coverage-on-version == matrix.python-version}}
         run: |
           # envvar and coverage Appended to the previous
-          mpirun -n 2 pytest --cov=wfl --cov-report term --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --with-mpi -k mpi --cov-append
+          mpirun -n 2 pytest --cov=pymatnext --cov-report term --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --with-mpi -k mpi --cov-append
 
       - name: 'Upload Coverage Data'
         uses: actions/upload-artifact@v2
