@@ -1,0 +1,10 @@
+[run]
+branch = True
+
+[report]
+precision = 2
+omit =
+    ../examples
+
+[html]
+directory = coverage-html

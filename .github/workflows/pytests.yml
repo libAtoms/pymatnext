@@ -67,18 +67,12 @@ jobs:
       - name: Test with pytest - plain
         if: env.coverage-on-version != matrix.python-version
         run: |
-          rm -rf $HOME/pytest_plain
-          mkdir $HOME/pytest_plain
-          #
-          pytest --runremote --basetemp $HOME/pytest_plain -rxXs
+          pytest -rxXs
 
       - name: Test with pytest - coverage
         if: env.coverage-on-version == matrix.python-version
         run: |
-          rm -rf $HOME/pytest_cov
-          mkdir $HOME/pytest_cov
-          #
-          pytest -v --cov=pymatnext --cov-report term --cov-report html --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --runremote --basetemp $HOME/pytest_cov -rxXs
+          pytest -v --cov=pymatnext --cov-report term --cov-report html --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered -rxXs
 
       # # DEBUGGING
       # - name: Setup tmate session
