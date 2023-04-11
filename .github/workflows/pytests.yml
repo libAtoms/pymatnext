@@ -45,7 +45,9 @@ jobs:
         run: pip install git+https://gitlab.com/ase/ase.git
 
       - name: Install matscipy after ASE
-        run: pip install matscipy
+        # for now use most recent github, fixes issue with deprecated/unsupported np.str in eam.io
+        # run: pip install matscipy
+        run: python3 -m pip install git+https://github.com/libAtoms/matscipy/
 
       - name: Install pymatnext
         run: pip install .
