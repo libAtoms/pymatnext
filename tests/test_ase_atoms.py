@@ -15,12 +15,14 @@ def test_composition():
 
 
 def test_initialize():
-    params = { "composition": "Cu2Al" }
+    params = {"composition": "Cu2Al", "n_atoms": 9, "initial_rand_vol_per_atom": 10.0, "initial_rand_min_dist": 0.5,
+              "calculator": {"type": "ASE"}, "walk": {"gmc_proportion": 1.0}}
     NSConfig_ASE_Atoms.initialize(params)
     assert np.all(NSConfig_ASE_Atoms._Zs == [13, 29])
     assert NSConfig_ASE_Atoms.n_quantities == 3 + 2
 
-    params = { "full_composition": "Cu2AlZn", "composition": "Cu2Al" }
+    params = {"full_composition": "AlCuZn", "composition": "Cu2Al", "n_atoms": 9, "initial_rand_vol_per_atom": 10.0, "initial_rand_min_dist": 0.5,
+              "calculator": {"type": "ASE"}, "walk": {"gmc_proportion": 1.0}}
     NSConfig_ASE_Atoms.initialize(params)
     assert np.all(NSConfig_ASE_Atoms._Zs == [13, 29, 30])
     assert NSConfig_ASE_Atoms.n_quantities == 3 + 3

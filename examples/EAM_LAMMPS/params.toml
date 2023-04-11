@@ -32,7 +32,7 @@
 
         [configs.calculator.args]
 
-            cmds = ["pair_style eam/alloy", "pair_coeff * * /home/cluster2/bernstei/src/work/pymatnext/examples/EAM_LAMMPS/AlCu_Zhou04.eam.alloy Al Cu"]
+            cmds = ["pair_style eam/alloy", "pair_coeff * * AlCu_Zhou04.eam.alloy Al Cu"]
 
             types.13 = 1
             types.29 = 2

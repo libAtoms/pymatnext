@@ -40,13 +40,15 @@ class FixNSCellMC : public Fix {
   double prev_boxlo[3], prev_boxhi[3], prev_xy, prev_yz, prev_xz;
   int seed;
   double Emax;
-  double min_aspect_ratio;
+  double min_aspect_ratio, pressure;
   int flat_V_prior;
   class RanMars *random;
   double pVol, dVol, pStretch, dStretch, pShear, dShear;
   int peflag;
   char *id_pe;
   char str[64];
+
+  double dPV, cumulative_dPV;
 
   bool move_rejected_early;
   int last_move_type;

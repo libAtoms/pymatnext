@@ -67,7 +67,7 @@ FixNSType::FixNSType(LAMMPS *lmp, int narg, char **arg) :
   semi_GC_flag = 1;
   if (strcmp(arg[iarg],"no") == 0) semi_GC_flag = 0;
   else if (strcmp(arg[iarg],"yes") != 0)
-    error->all(FLERR,"Illegal fix ns/type flat_V_prior value");
+    error->all(FLERR,"Illegal fix ns/type semi_GC_flag value");
   iarg++;
 
   if (semi_GC_flag) {
@@ -195,7 +195,7 @@ void FixNSType::initial_integrate(int vflag)
     rv = random_l->uniform();
     int dtype = 1 + static_cast<int>(rv * (ntypes-1)) % (ntypes-1);
     int new_type = 1 + (((type[atom_0]-1) + dtype) % ntypes);
-    dmuN = mu[type[atom_0]-1] - mu[new_type-1];
+    dmuN = mu[new_type-1] - mu[type[atom_0]-1];
     type[atom_0] = new_type;
 #ifdef DEBUG
     std::cout << "SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " <<
@@ -263,9 +263,9 @@ void FixNSType::final_integrate()
 
   // if potential energy + d(mu N) is above Emax then reject move
   // need to include previous steps' cumulative dmuN contributions, as well as current ones
-  if (ecurrent + cumulative_dmuN + dmuN >= Emax) {
+  if (ecurrent - cumulative_dmuN - dmuN >= Emax) {
 #ifdef DEBUG
-    std::cout << "REJECT E == " << ecurrent << " + " << cumulative_dmuN + dmuN << " >= Emax == " << Emax << " " << std::endl;
+    std::cout << "REJECT E == " << ecurrent << " - " << cumulative_dmuN + dmuN << " >= Emax == " << Emax << " " << std::endl;
 #endif
     // reject move, so don't touch cumulative_dmuN, since type change that led to current dmuN was reverted
 

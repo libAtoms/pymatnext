@@ -14,6 +14,7 @@ import ase.io
 import ase.units
 from ase.atoms import Atoms
 from ase.neighborlist import neighbor_list
+from ase.calculators.calculator import all_changes
 
 from .atoms_contig_store import AtomsContiguousStorage
 
@@ -72,7 +73,7 @@ class NSConfig_ASE_Atoms():
         """
         # parse composition and set up symbols and cls._Zs
         if isinstance(composition, str):
-            composition_p = re.split(r"([A-Z][a-z]?[0-9]*)", re.sub("\s+", "", composition))
+            composition_p = re.split(r"([A-Z][a-z]?[0-9]*)", re.sub(r"\s+", "", composition))
             if any([s != "" for s in composition_p[0::2]]):
                 raise ValueError(f"Unknown characters in composition {composition}")
             composition_p = composition_p[1::2]
@@ -125,7 +126,8 @@ class NSConfig_ASE_Atoms():
     def __init__(self, params, compression=np.inf, source="random", rng=None, kB=ase.units.kB, allocate_only=False):
         check_fill_defaults(params, param_defaults_ase_atoms, label="configs")
 
-        assert len(self._Zs) > 0
+        if len(self._Zs) == 0:
+            NSConfig_ASE_Atoms.initialize(params)
 
         # Save params for later construction of the calculator
         # Also save calc_type, since it's needed for some other setup tasks,
@@ -231,7 +233,15 @@ class NSConfig_ASE_Atoms():
         self.atoms.prev_positions = np.zeros(self.atoms.positions.shape)
         self.atoms.prev_cell = np.zeros(self.atoms.cell.array.shape)
 
+        self.reset_walk_counters()
+
+
+    def reset_walk_counters(self):
+        """Reset attempted and successful step counters
+        """
+
         self.n_att_acc = np.zeros((len(NSConfig_ASE_Atoms._step_size_params), 2), dtype=np.int64)
+
 
     def init_calculator(self):
         """Initialize calculator.  Not part of constructor since some calculators (e.g. LAMMPS)
@@ -281,8 +291,8 @@ class NSConfig_ASE_Atoms():
                 Z_types[Z] = species_type
 
             # make numpy arrays for (presumably?) faster lookup
-            self.type_of_Z = np.zeros(max(Z_types.keys()) + 1, dtype=np.int)
-            self.Z_of_type = np.zeros(max(Z_types.values()) + 1, dtype=np.int)
+            self.type_of_Z = np.zeros(max(Z_types.keys()) + 1, dtype=int)
+            self.Z_of_type = np.zeros(max(Z_types.values()) + 1, dtype=int)
             for Z, Z_type in Z_types.items():
                 self.type_of_Z[Z] = Z_type
                 self.Z_of_type[Z_type] = Z
@@ -430,8 +440,8 @@ class NSConfig_ASE_Atoms():
         each species (if constant chemical potential)
         """
         if self.calc_type == "ASE":
-            self.calc.calculate(self.atoms, properties=["free_energy", "forces"])
-            self.atoms.info["NS_energy"][...] = self.calc.results["free_energy"]
+            self.calc.calculate(self.atoms, properties=["free_energy", "forces"], system_changes=all_changes)
+            self.atoms.info["NS_energy"][...] = self.calc.results.get("free_energy", self.calc.results.get("energy"))
             self.atoms.arrays["NS_forces"][...] = self.calc.results["forces"]
         elif self.calc_type == "LAMMPS":
             self.calc.reset_box([0.0, 0.0, 0.0], np.diag(self.atoms.cell), self.atoms.cell[0, 1], self.atoms.cell[1, 2], self.atoms.cell[0, 2])
@@ -573,7 +583,6 @@ class NSConfig_ASE_Atoms():
                         "flat_V_prior": self.move_params["cell"]["flat_V_prior"],
                         "extras": [ "volume", "natoms"] + ([f"x_{Z}" for Z in self._Zs] if len(self._Zs) > 1 else []) }
 
-        print("BOB NSConfigs_ASE_Atoms returning header_dict", header_dict)
         return header_dict
 
 

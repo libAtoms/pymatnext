@@ -3,19 +3,19 @@
     output_filename_prefix = "EAM_LAMMPS_sGC"
     random_seed = 5
 
-    max_iter = 50000
+    max_iter = 500
 
-    stdout_report_interval_s = 60
+    stdout_report_interval_s = 10
 
-    snapshot_interval = 50000
+    snapshot_interval = 50
 
     [global.step_size_tune]
 
-        interval = 1000
+        interval = 200
 
 [ns]
 
-    n_walkers = 280
+    n_walkers = 70
     walk_length = 400
     configs_module = "pymatnext.ns_configs.ase_atoms"
 
@@ -32,7 +32,7 @@
 
         [configs.calculator.args]
 
-            cmds = ["pair_style eam/alloy", "pair_coeff * * AlCu_Zhou04.eam.alloy Al Cu"]
+            cmds = ["pair_style eam/alloy", "pair_coeff * * _POTENTIAL_DIR_/AlCu_Zhou04.eam.alloy Al Cu"]
 
             types.13 = 1
             types.29 = 2
@@ -56,5 +56,5 @@
 
         [configs.walk.type]
             sGC = true
-            mu.13 = 0.1
-            mu.29 = 0.2
+            mu.13 = 0.0
+            mu.29 = 30.0
