@@ -256,7 +256,12 @@ class NSConfig_ASE_Atoms():
             self.calc = calc_module.calc
         elif self.calc_type == "LAMMPS":
             lammps_header = params_calc["args"].get("header", ["units metal", "atom_style atomic", "atom_modify map array sort 0 0"]).copy()
-            lammps_cmd_args = params_calc["args"].get("cmd_args", ["-echo", "log", "-log", "lammps.log", "-screen", "none", "-nocite"])
+
+            # base command args
+            lammps_cmd_args = params_calc["args"].get("cmd_args", ["-echo", "log", "-screen", "none", "-nocite"])
+            # special setting for log file, default none
+            lammps_cmd_args.extend(["-log", params_calc["args"].get("log_file", "none")])
+
             lammps_name = params_calc["args"].get("name", "")
             self.calc = lammps.lammps(lammps_name, lammps_cmd_args)
             for cmd in lammps_header:
