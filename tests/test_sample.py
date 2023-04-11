@@ -171,8 +171,10 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
         assert False
 
 
-@pytest.mark.skipif(lammps is None)
 def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
+    if lammps is None:
+        pytest.skip("lammps module not installed")
+
     if using_mpi:
         from mpi4py import MPI
         if MPI.COMM_WORLD.size != 2:
