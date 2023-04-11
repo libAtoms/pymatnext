@@ -38,8 +38,8 @@ jobs:
       - name: Install pip from Conda
         run: conda install pip
 
-      - name: Install dependencies from pip (some will already be taken care of by conda's phonop3py and its dependencies)
-        run: pip install wheel setuptools numpy scipy matplotlib flake8 pytest pytest-cov
+      - name: Install pytest requirements from pip (specific pymatnext dependencies will be automatically installed when it is)
+        run: pip install wheel setuptools flake8 pytest pytest-cov
 
       - name: Install latest ASE from gitlab
         run: pip install git+https://gitlab.com/ase/ase.git
