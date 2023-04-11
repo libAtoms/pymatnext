@@ -1,0 +1,103 @@
+# This is testing the python versions *other than* the
+#   one in the QUIP Docker, which is 3.7.10 at the time
+#   of writing this. Coverage is disabled.
+
+name: Python Package and tests
+
+# on all push actions AND can be triggered manually as well
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ 3.8 ]
+      max-parallel: 5
+    env:
+      coverage-on-version: 3.8
+      use-mpi: True
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Add conda to system path
+        run: |
+          # $CONDA is an environment variable pointing to the root of the miniconda directory
+          echo $CONDA/bin >> $GITHUB_PATH
+
+      # - name: Install Dependencies from Conda
+        # run: conda env update --file=devtools/conda-envs/environment.yml --name=base
+
+      - name: Install pip from Conda
+        run: conda install pip
+
+      - name: Install pytest requirements from pip (specific pymatnext dependencies will be automatically installed when it is)
+        run: pip install wheel setuptools flake8 pytest pytest-cov
+
+      - name: Install latest ASE from gitlab
+        run: pip install git+https://gitlab.com/ase/ase.git
+
+      - name: Install matscipy after ASE
+        # for now use most recent github, fixes issue with deprecated/unsupported np.str in eam.io
+        # run: pip install matscipy
+        run: python3 -m pip install git+https://github.com/libAtoms/matscipy/
+
+      - name: Install pymatnext
+        run: pip install .
+
+      - name: Install MPI dependencies
+        if: env.use-mpi
+        run: |
+          # this can eaily be turned off if needed
+          conda install -c conda-forge mpi4py openmpi pytest-mpi
+          pip install mpipool
+
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 pymatnext/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings.
+          flake8 pymatnext/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+      - name: Test with pytest - plain
+        if: env.coverage-on-version != matrix.python-version
+        run: |
+          pytest -rxXs
+
+      - name: Test with pytest - coverage
+        if: env.coverage-on-version == matrix.python-version
+        run: |
+          pytest -v --cov=pymatnext --cov-report term --cov-report html --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered -rxXs
+
+      # # DEBUGGING
+      # - name: Setup tmate session
+          # if: failure()
+          # uses: mxschmitt/action-tmate@v3
+          # timeout-minutes: 15
+
+      - name: MPI tests -- plain
+        if: ${{ env.use-mpi && env.coverage-on-version != matrix.python-version}}
+        run: |
+          # envvar and test run - No coverage
+          mpirun -n 2 pytest --with-mpi -k mpi
+
+      - name: MPI tests -- coverage
+        if: ${{ env.use-mpi && env.coverage-on-version == matrix.python-version}}
+        run: |
+          # envvar and coverage Appended to the previous
+          mpirun -n 2 pytest --cov=pymatnext --cov-report term --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --with-mpi -k mpi --cov-append
+
+      - name: 'Upload Coverage Data'
+        uses: actions/upload-artifact@v2
+        if: env.coverage-on-version == matrix.python-version
+        with:
+          name: coverage-html-${{ matrix.python-version }}
+          path: coverage-html/
+          retention-days: 7

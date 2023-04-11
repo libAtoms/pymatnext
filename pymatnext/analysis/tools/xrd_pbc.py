@@ -458,7 +458,7 @@ def analysis(atoms=None, twotheta_range=[1.0, 180.0], twotheta_n=None, wavelengt
 
     F_k = np.sum(exp_2_pi_i_k_dot_r, axis=0)
     if do_Lorentz:
-        F_k *= (1.0 + np.cos(2.0 * theta) ** 2) / (cos(theta) * (sin(theta)) ** 2 )
+        F_k *= (1.0 + np.cos(2.0 * theta) ** 2) / (np.cos(theta) * (np.sin(theta)) ** 2 )
 
     xrd = np.zeros(twotheta_n)
     np.add.at(xrd, theta_i_of_k, np.abs(F_k)**2)

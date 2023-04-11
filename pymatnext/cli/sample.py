@@ -76,7 +76,7 @@ def parse_args(args_list=None):
     parser.add_argument("--output_filename_postfix", "-p", help="string to append to params.global.output_filename_prefix", default="")
     parser.add_argument("--max_iter", "-i", type=int, help="max number of NS iterations, overriding params")
     parser.add_argument("--restart_diff_nproc", "-d", action="store_true", help="allow restarts to use a different number of processors than previous partial run")
-    parser.add_argument("input", help="input json/yaml file")
+    parser.add_argument("input", help="input parameters toml file")
     args = parser.parse_args(args_list)
 
     return args

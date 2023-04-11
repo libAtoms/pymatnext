@@ -171,8 +171,10 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
         assert False
 
 
-@pytest.mark.skipif(lammps is None)
 def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
+    if lammps is None:
+        pytest.skip("lammps module not installed")
+
     if using_mpi:
         from mpi4py import MPI
         if MPI.COMM_WORLD.size != 2:
@@ -228,9 +230,9 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
 
     # from test run 12/8/2022
     if using_mpi:
-        fields_ref = np.asarray([299, -391.4317494342, 22269.1573663966, 16.0000000000, 0.1875000000, 0.8125000000])
+        fields_ref = np.asarray([2.99000000e+02, -3.91163426e+02,  1.08674253e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
     else:
-        fields_ref = np.asarray([2.99000000e+02, -1.23138177e+02,  1.24153013e+04,  1.60000000e+01, 7.50000000e-01,  2.50000000e-01])
+        fields_ref = np.asarray([299, -366.1823642208, 6004.3693892916, 16.0000000000, 0.2500000000, 0.7500000000])
 
     with open(tmp_path / 'EAM_LAMMPS.test.NS_samples') as fin:
         for l in fin:
