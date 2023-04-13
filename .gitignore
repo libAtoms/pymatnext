@@ -11,3 +11,4 @@ job.*
 lammps.log
 *.egg-info
 build
+.coverage

@@ -24,6 +24,28 @@ def calc_log_a(iters, n_walkers, n_cull, each_cull=False):
 
 
 def calc_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
+    """Return the terms that sum to Z
+
+    Parameters
+    ----------
+    beta: float
+        1/kB T
+    log_a: list(float)
+        log of NS factors
+    Es: list(float)
+        energies
+    flat_V_prior: bool, default False
+        data came from flat V prior NS, needs to be reweighted by V^N_atoms
+    N_atoms: int / list(int), default None
+        number of atoms, needed for flat_V_prior
+    Vs: list(float)
+        volume of cell, needed for flat_V_prio
+
+    Returns
+    -------
+    Z_term: list of terms that sum to Z, multipled by exp(-shift)
+    shift: shift subtracted from each log(Z_term_true)
+    """
     log_Z_term = log_a[:] - beta*Es[:]
     if flat_V_prior:
         if N_atoms is None or Vs is None:
@@ -41,7 +63,7 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
     Es: ndarray(float)
         energies at each iter
     E_min: float
-        value energy was shifted by
+        value that was subtracted from Es
     Vs: ndarray(float), optional
         volumes at each iter, required if flat_V_prior is true
     extra_vals: list(ndarray(float)), optional
@@ -67,8 +89,12 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
     """
     beta = 1.0/(kB*T)
 
+    # Z_term here is actually Z_term_true * exp(-shift)
     (Z_term, shift) = calc_Z_terms(beta, log_a, Es, flat_V_prior, N_atoms, Vs)
 
+    # Z = Z_true * exp(-shift)
+    # exp(-shift) constant factor doesn't matter for quantities that are weighted sums with Z_term
+    # and normalized by Z
     Z = sum(Z_term)
 
     U_pot = sum(Z_term*Es) / Z
@@ -94,13 +120,8 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
         for v in (extra_vals):
             extra_vals_out.append(np.sum(Z_term * v, axis=-1) / Z)
 
-    log_Z = np.log(Z) + shift - beta*E_min
-    # Z(T=0) contributed entirely by lowest energy, since all others are exponentially suppressed by exp(-beta E_i) term
-    # Z(T=0) = a(E_min) * exp (- beta*E_min)
-    # Helmholtz free energy F = - log_Z / beta
-    # F(T=0) = -log_a(E_min)/beta + E_min
-    # shift F so that it equals lowest internal energy (really E+PV) of all NS samples
-    Helmholtz_F = -log_Z / beta + log_a[-1] / beta
+    log_Z = np.log(Z) + shift
+    Helmholtz_F = -log_Z / beta + E_min
 
     Z_max = np.amax(Z_term)
     low_percentile_config = np.where(Z_term > Z_max/10.0)[0][0]
