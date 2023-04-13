@@ -69,7 +69,7 @@ def main():
         comm_rank = MPI.COMM_WORLD.Get_rank()
         comm_size = MPI.COMM_WORLD.Get_size()
         if comm_rank == 0:
-            warnings.warn(f'Using mpi nprocs={comm_rank}\n')
+            warnings.warn(f'Using mpi nprocs={comm_size}\n')
     else:
         comm_rank = 0
         comm_size = 1
