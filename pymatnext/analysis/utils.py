@@ -24,24 +24,49 @@ def calc_log_a(iters, n_walkers, n_cull, each_cull=False):
 
 
 def calc_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
-    log_Z_term = log_a[:] - beta*Es[:]
+    """Return the terms that sum to Z
+
+    Parameters
+    ----------
+    beta: float
+        1/(kB T)
+    log_a: list(float)
+        log of NS factors
+    Es: list(float)
+        energies
+    flat_V_prior: bool, default False
+        data came from flat V prior NS, needs to be reweighted by V^N_atoms
+    N_atoms: int / list(int), default None
+        number of atoms, needed for flat_V_prior
+    Vs: list(float)
+        volume of cell, needed for flat_V_prio
+
+    Returns
+    -------
+    Z_term: list of terms that sum to Z, multipled by exp(-shift)
+    log_shift: shift subtracted from each log(Z_term_true) to get log(Z_term)
+    """
+    log_Z_term = log_a[:] - beta * Es[:]
+
     if flat_V_prior:
         if N_atoms is None or Vs is None:
             raise RuntimeError('flat_V_prior requires numbers of atoms and volumes to reweight')
-        log_Z_term += N_atoms*np.log(Vs[:])
-    shift = np.amax(log_Z_term[:])
-    Z_term = np.exp(log_Z_term[:] - shift)
-    return (Z_term, shift)
+        log_Z_term += N_atoms * np.log(Vs[:])
+
+    log_shift = np.amax(log_Z_term[:])
+    Z_term = np.exp(log_Z_term[:] - log_shift)
+
+    return (Z_term, log_shift)
 
 
-def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_extra_DOF, KS_volume_test):
+def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_extra_DOF, KS_volume_test):
     """do an analysis at a single temperature
     T: float
         temperature
     Es: ndarray(float)
         energies at each iter
-    E_min: float
-        value energy was shifted by
+    E_shift: float
+        value that was subtracted from Es
     Vs: ndarray(float), optional
         volumes at each iter, required if flat_V_prior is true
     extra_vals: list(ndarray(float)), optional
@@ -65,26 +90,30 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
     -------
     dict of enesmble averages of various thermodynamic quantities and extra_vals
     """
-    beta = 1.0/(kB*T)
+    beta = 1.0 / (kB * T)
 
-    (Z_term, shift) = calc_Z_terms(beta, log_a, Es, flat_V_prior, N_atoms, Vs)
+    # Z_term here is actually Z_term_true * exp(-log_shift)
+    (Z_term, log_shift) = calc_Z_terms(beta, log_a, Es, flat_V_prior, N_atoms, Vs)
 
-    Z = sum(Z_term)
+    # Note that
+    #     Z_term = Z_term_true * exp(-log_shift)
+    # exp(-log_shift) constant factor doesn't matter for quantities that are calculated from sums
+    # weighted with Z_term and normalized by Z_term_sum
+    Z_term_sum = sum(Z_term)
 
-    U_pot = sum(Z_term*Es) / Z
+    U_pot = sum(Z_term * Es) / Z_term_sum
 
     if N_atoms is not None:
-        N = sum(Z_term*N_atoms) / Z
+        N = sum(Z_term * N_atoms) / Z_term_sum
         n_extra_DOF * N
 
-    U = n_extra_DOF / (2.0 * beta) + U_pot + E_min
+    U = n_extra_DOF / (2.0 * beta) + U_pot + E_shift
 
-    Cvp = n_extra_DOF * kB / 2.0 + kB * beta * beta * (sum(Z_term * Es**2) / Z - U_pot**2)
+    Cvp = n_extra_DOF * kB / 2.0 + kB * beta * beta * (sum(Z_term * Es**2) / Z_term_sum - U_pot**2)
 
     if Vs is not None:
-        V = sum(Z_term*Vs)/Z
-        #thermal_exp = -1.0/V * (sum(Z_term*Vs*Vs)*(-beta)*Z - sum(Z_term*Vs)*sum(Z_term*Vs)*(-beta)) / Z**2
-        thermal_exp = -1.0/V * kB * beta*beta * (sum(Z_term*Vs)*sum(Z_term*Es)/Z - sum(Z_term*Vs*Es)) / Z
+        V = sum(Z_term * Vs) / Z_term_sum
+        thermal_exp = -1.0 / V * kB * beta * beta * (sum(Z_term * Vs) * sum(Z_term * Es) / Z_term_sum - sum(Z_term * Vs * Es)) / Z_term_sum
     else:
         V = None
         thermal_exp = None
@@ -92,15 +121,21 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
     if extra_vals is not None and len(extra_vals) > 0:
         extra_vals_out = []
         for v in (extra_vals):
-            extra_vals_out.append(np.sum(Z_term * v, axis=-1) / Z)
+            extra_vals_out.append(np.sum(Z_term * v, axis=-1) / Z_term_sum)
 
-    log_Z = np.log(Z) + shift - beta*E_min
-    # Z(T=0) contributed entirely by lowest energy, since all others are exponentially suppressed by exp(-beta E_i) term
-    # Z(T=0) = a(E_min) * exp (- beta*E_min)
-    # Helmholtz free energy F = - log_Z / beta
-    # F(T=0) = -log_a(E_min)/beta + E_min
-    # shift F so that it equals lowest internal energy (really E+PV) of all NS samples
-    Helmholtz_F = -log_Z / beta + log_a[-1] / beta
+    # undo shift of Z_term
+    log_Z = np.log(Z_term_sum) + log_shift
+
+    # we want last Z term to have w = 1, so we define a factor f which scales it correctly
+    #    f exp(log_shift) Z_term[-1] = 1.0 * exp(-beta Es[-1])
+    #    f = exp(-beta Es[-1] - log_shift) / Z_term[-1]
+    #    log(f) = -beta Es[-1] - log_shift - log(Z_term[-1])
+    log_f = -beta * Es[-1] - log_shift - np.log(Z_term[-1])
+    # this factor rescales every term in Z
+    log_Z += log_f
+
+    # also add the E_shift
+    Helmholtz_F = -log_Z / beta + E_shift
 
     Z_max = np.amax(Z_term)
     low_percentile_config = np.where(Z_term > Z_max/10.0)[0][0]
@@ -123,12 +158,12 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
     else:
         ks_gaussianity = None
 
-    Z_fract = np.sum(Z_term[low_percentile_config:high_percentile_config + 1]) / Z
+    Z_fract = np.sum(Z_term[low_percentile_config:high_percentile_config + 1]) / Z_term_sum
 
     results_dict = {'log_Z': log_Z,
                     'FG': Helmholtz_F,
                     'U': U,
-                    'S': (U - Helmholtz_F)*beta,
+                    'S': (U - Helmholtz_F) * beta,
                     'Cvp': Cvp}
 
     if Vs is not None:
