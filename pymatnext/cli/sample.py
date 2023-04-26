@@ -332,8 +332,8 @@ def sample(args, MPI, NS_comm, walker_comm):
 
         loop_iter += 1
 
-    if clone_history_filename is not None:
-        clone_history_filename.close()
+    if clone_history_file is not None:
+        clone_history_file.close()
 
 
 def main(args_list=None, mpi_finalize=True):
