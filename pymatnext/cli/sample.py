@@ -138,7 +138,8 @@ def sample(args, MPI, NS_comm, walker_comm):
             cur_param_dict[arg_name_final] = arg_val
         else:
             raise ValueError(f"Can't override param of type {type(cur_param_dict[arg_name_final])}") 
-        warnings.warn(f"Overridden params file {arg_name} with {cur_param_dict[arg_name_final]}")
+        if NS_comm.rank == 0:
+            warnings.warn(f"Overridden params file {arg_name} with {cur_param_dict[arg_name_final]}")
 
     params_global = params["global"]
 
