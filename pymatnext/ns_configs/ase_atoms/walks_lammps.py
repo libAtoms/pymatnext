@@ -159,6 +159,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         warnings.warn(f"LAMMPS ns/gmc run raised exception {exc_str}")
         if "Lost atoms" in exc_str:
             # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+            ns_atoms.end_calculator()
             ns_atoms.init_calculator()
         reject = True
 
@@ -221,6 +222,7 @@ def walk_cell(ns_atoms, Emax, rng):
         warnings.warn(f"LAMMPS ns/cellmc run raised exception {exc_str}")
         if "Lost atoms" in exc_str:
             # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+            ns_atoms.end_calculator()
             ns_atoms.init_calculator()
         failed = True
 
