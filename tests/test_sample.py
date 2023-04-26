@@ -139,10 +139,10 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+    main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
                  str(tmp_path / 'params.toml')]
     if max_iter is not None:
-        main_args = ['--max_iter', str(max_iter)] + main_args
+        main_args = ['--override_param', '/global/max_iter', str(max_iter)] + main_args
 
     sample.main(main_args, mpi_finalize=False)
     del sys.path[0]
@@ -216,10 +216,10 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+    main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
                  str(tmp_path / 'params_sGC.toml')]
     if max_iter is not None:
-        main_args = ['--max_iter', str(max_iter)] + main_args
+        main_args = ['--override_param', '/global/max_iter', str(max_iter)] + main_args
 
     sample.main(main_args, mpi_finalize=False)
 
@@ -275,7 +275,7 @@ def do_pressure(tmp_path, monkeypatch, using_mpi):
             # numbers in output will vary
             monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-        main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+        main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
                      str(tmp_path / toml_file)]
 
         sample.main(main_args, mpi_finalize=False)
@@ -331,7 +331,7 @@ def do_sGC(tmp_path, monkeypatch, using_mpi):
             # numbers in output will vary
             monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-        main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+        main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
                      str(tmp_path / toml_file)]
 
         sample.main(main_args, mpi_finalize=False)
