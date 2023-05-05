@@ -69,12 +69,12 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
 
     (Z_term, shift) = calc_Z_terms(beta, log_a, Es, flat_V_prior, N_atoms, Vs)
 
-    Z = sum(Z_term)
+    Z = np.sum(Z_term)
 
-    U_pot = sum(Z_term*Es) / Z
+    U_pot = np.sum(Z_term*Es) / Z
 
     if N_atoms is not None:
-        N = sum(Z_term*N_atoms) / Z
+        N = np.sum(Z_term*N_atoms) / Z
         n_extra_DOF * N
 
     U = n_extra_DOF / (2.0 * beta) + U_pot + E_min
@@ -82,9 +82,9 @@ def analyse_T(T, Es, E_min, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_
     Cvp = n_extra_DOF * kB / 2.0 + kB * beta * beta * (sum(Z_term * Es**2) / Z - U_pot**2)
 
     if Vs is not None:
-        V = sum(Z_term*Vs)/Z
-        #thermal_exp = -1.0/V * (sum(Z_term*Vs*Vs)*(-beta)*Z - sum(Z_term*Vs)*sum(Z_term*Vs)*(-beta)) / Z**2
-        thermal_exp = -1.0/V * kB * beta*beta * (sum(Z_term*Vs)*sum(Z_term*Es)/Z - sum(Z_term*Vs*Es)) / Z
+        V = np.sum(Z_term*Vs)/Z
+        #thermal_exp = -1.0/V * (sum(Z_term*Vs*Vs)*(-beta)*Z - np.sum(Z_term*Vs)*sum(Z_term*Vs)*(-beta)) / Z**2
+        thermal_exp = -1.0/V * kB * beta*beta * (sum(Z_term*Vs)*sum(Z_term*Es)/Z - np.sum(Z_term*Vs*Es)) / Z
     else:
         V = None
         thermal_exp = None
