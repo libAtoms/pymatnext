@@ -140,6 +140,7 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
     main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
+                 '--override_param', '/global/clone_history', 'T',
                  str(tmp_path / 'params.toml')]
     if max_iter is not None:
         main_args = ['--override_param', '/global/max_iter', str(max_iter)] + main_args
@@ -169,6 +170,11 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
         print("final line test", fields)
         print("final line ref ", fields_ref)
         assert False
+
+    # this will fail if number of steps is not divisible by N_samples interval
+    with open(tmp_path / 'Morse_ASE.test.clone_history') as fin:
+        N_clone_hist_lines = len(list(fin))
+    assert N_clone_hist_lines == int(fields[0]) + 2
 
 
 def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
