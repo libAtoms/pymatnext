@@ -135,6 +135,7 @@ class NSConfig_ASE_Atoms():
         # is called, since some calculator object types cannot be communicated by mpi4py
         self._params_calc = deepcopy(params["calculator"])
         self.calc_type = self._params_calc["type"]
+        self.calc = None
 
         # for temperature
         NSConfig_ASE_Atoms.kB = kB
@@ -241,6 +242,21 @@ class NSConfig_ASE_Atoms():
         """
 
         self.n_att_acc = np.zeros((len(NSConfig_ASE_Atoms._step_size_params), 2), dtype=np.int64)
+
+
+    def end_calculator(self):
+        """Close any existing initialized calculator
+        """
+
+        if self.calc_type == "ASE":
+            pass
+        elif self.calc_type == "LAMMPS":
+            if self.calc is not None:
+                self.calc.close()
+        else:
+            raise NotImplementedError(f"Unknown calculator type {self.calc_type}")
+
+        self.calc = None
 
 
     def init_calculator(self):

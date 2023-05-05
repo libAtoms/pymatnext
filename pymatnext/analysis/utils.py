@@ -99,12 +99,12 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     #     Z_term = Z_term_true * exp(-log_shift)
     # exp(-log_shift) constant factor doesn't matter for quantities that are calculated from sums
     # weighted with Z_term and normalized by Z_term_sum
-    Z_term_sum = sum(Z_term)
+    Z_term_sum = np.sum(Z_term)
 
-    U_pot = sum(Z_term * Es) / Z_term_sum
+    U_pot = np.sum(Z_term * Es) / Z_term_sum
 
     if N_atoms is not None:
-        N = sum(Z_term * N_atoms) / Z_term_sum
+        N = np.sum(Z_term * N_atoms) / Z_term_sum
         n_extra_DOF * N
 
     U = n_extra_DOF / (2.0 * beta) + U_pot + E_shift
@@ -112,7 +112,7 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     Cvp = n_extra_DOF * kB / 2.0 + kB * beta * beta * (sum(Z_term * Es**2) / Z_term_sum - U_pot**2)
 
     if Vs is not None:
-        V = sum(Z_term * Vs) / Z_term_sum
+        V = np.sum(Z_term * Vs) / Z_term_sum
         thermal_exp = -1.0 / V * kB * beta * beta * (sum(Z_term * Vs) * sum(Z_term * Es) / Z_term_sum - sum(Z_term * Vs * Es)) / Z_term_sum
     else:
         V = None

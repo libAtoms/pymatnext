@@ -155,7 +155,12 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         E, F = extract_E_F(ns_atoms.calc, False)
         reject = (E >= Emax)
     except Exception as exc:
-        warnings.warn(f"LAMMPS ns/gmc run raised exception {exc}")
+        exc_str = str(exc)
+        warnings.warn(f"LAMMPS ns/gmc run raised exception {exc_str}")
+        if "Lost atoms" in exc_str:
+            # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+            ns_atoms.end_calculator()
+            ns_atoms.init_calculator()
         reject = True
 
     if not reject:
@@ -213,7 +218,12 @@ def walk_cell(ns_atoms, Emax, rng):
         ns_atoms.calc.command(f"run {ns_atoms.walk_traj_len['cell']} post no")
         failed = False
     except Exception as exc:
-        warnings.warn(f"LAMMPS ns/cellmc run raised exception {exc}")
+        exc_str = str(exc)
+        warnings.warn(f"LAMMPS ns/cellmc run raised exception {exc_str}")
+        if "Lost atoms" in exc_str:
+            # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+            ns_atoms.end_calculator()
+            ns_atoms.init_calculator()
         failed = True
 
     if not failed:
@@ -228,8 +238,13 @@ def walk_cell(ns_atoms, Emax, rng):
     n_att = {}
     n_acc = {}
     for submove_i, submove_type in enumerate(["volume", "stretch", "shear"]):
-        n_att[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 0, 0))
-        n_acc[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 1, 0))
+        try:
+            n_att[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 0, 0))
+            n_acc[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 1, 0))
+        except Exception as exc:
+            warnings.warn(f"LAMMPS extract_fix failed with {exc}, ignoring")
+            n_att[submove_type] = 0
+            n_acc[submove_type] = 0
 
     return [("cell_volume_per_atom", n_att["volume"], n_acc["volume"]),
             ("cell_shear", n_att["shear"], n_acc["shear"]),
