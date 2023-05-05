@@ -139,10 +139,11 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+    main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
+                 '--override_param', '/global/clone_history', 'T',
                  str(tmp_path / 'params.toml')]
     if max_iter is not None:
-        main_args = ['--max_iter', str(max_iter)] + main_args
+        main_args = ['--override_param', '/global/max_iter', str(max_iter)] + main_args
 
     sample.main(main_args, mpi_finalize=False)
     del sys.path[0]
@@ -154,21 +155,30 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
 
     # from test run 12/8/2022
     if using_mpi:
-        fields_ref = np.asarray([9.90000000e+01, 8.04691943e+00, 1.28925862e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([9.90000000e+01, 8.04691943e+00, 1.28925862e+04, 1.60000000e+01])
     else:
-        fields_ref = np.asarray([9.90000000e+01, 8.08011910e+00, 1.29457779e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([9.90000000e+01, 8.08011910e+00, 1.29457779e+04, 1.60000000e+01])
 
     with open(tmp_path / 'Morse_ASE.test.NS_samples') as fin:
         for l in fin:
             pass
-    fields = np.asarray([float(f) for f in l.strip().split()])
+    samples_fields = np.asarray([float(f) for f in l.strip().split()])
 
     # tolerance loosened so that restart, which isn't perfect due to finite precision in
     # saved cofig file, still passes
-    if not np.allclose(fields, fields_ref, rtol=0.02):
-        print("final line test", fields)
-        print("final line ref ", fields_ref)
+    if not np.allclose(samples_fields, samples_fields_ref, rtol=0.02):
+        print("final samples line test", samples_fields)
+        print("final samples line ref ", samples_fields_ref)
         assert False
+
+    # this will fail if number of steps is not divisible by N_samples interval, because
+    # clone_hist always saves every line. Also, clone_hist is a hack that's truncated by
+    # restarts
+    with open(tmp_path / 'Morse_ASE.test.clone_history') as fin:
+        for l in fin:
+            pass
+    clone_hist_fields = np.asarray([int(f) for f in l.strip().split()])
+    assert clone_hist_fields[0] == int(samples_fields[0])
 
 
 def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
@@ -216,10 +226,10 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+    main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
                  str(tmp_path / 'params_sGC.toml')]
     if max_iter is not None:
-        main_args = ['--max_iter', str(max_iter)] + main_args
+        main_args = ['--override_param', '/global/max_iter', str(max_iter)] + main_args
 
     sample.main(main_args, mpi_finalize=False)
 
@@ -275,7 +285,7 @@ def do_pressure(tmp_path, monkeypatch, using_mpi):
             # numbers in output will vary
             monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-        main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+        main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
                      str(tmp_path / toml_file)]
 
         sample.main(main_args, mpi_finalize=False)
@@ -331,7 +341,7 @@ def do_sGC(tmp_path, monkeypatch, using_mpi):
             # numbers in output will vary
             monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-        main_args = ['--random_seed', '5', '--output_filename_postfix', '.test',
+        main_args = ['--override_param', '/global/random_seed', '5', '--override_param', '/global/output_filename_prefix_extra', '.test',
                      str(tmp_path / toml_file)]
 
         sample.main(main_args, mpi_finalize=False)

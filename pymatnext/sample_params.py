@@ -6,6 +6,7 @@ import numpy as np
 param_defaults = {
     "global": {
         "output_filename_prefix": "NS",
+        "output_filename_prefix_extra": "",
         "random_seed": -1,
         "max_iter": -1,
         "stdout_report_interval_s": 60,
@@ -18,7 +19,8 @@ param_defaults = {
             "min_accept_rate": 0.25,
             "max_accept_rate": 0.5,
             "adjust_factor": 1.25
-        }
+        },
+        "clone_history": False
     },
     "ns": ["_REQ_", "_IGNORE_"],
     "configs": ["_REQ_", "_IGNORE_"]

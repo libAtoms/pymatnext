@@ -3,6 +3,7 @@
 import sys
 import os
 import warnings
+import re
 
 import time
 import importlib
@@ -72,10 +73,11 @@ def parse_args(args_list=None):
     """
 
     parser = ArgumentParser()
-    parser.add_argument("--random_seed", "-s", type=int, help="random seed overriding params.global.random_seed file")
-    parser.add_argument("--output_filename_postfix", "-p", help="string to append to params.global.output_filename_prefix", default="")
-    parser.add_argument("--max_iter", "-i", type=int, help="max number of NS iterations, overriding params")
-    parser.add_argument("--restart_diff_nproc", "-d", action="store_true", help="allow restarts to use a different number of processors than previous partial run")
+    parser.add_argument("--override_param", "-o", nargs=2, action="append", help="override a parameter, specified by xpath "
+                                                                                 "notation, e.g. /global/random_seed or "
+                                                                                 "/global/otput_filename_prefix_extra", default=[])
+    parser.add_argument("--restart_diff_nproc", "-d", action="store_true", help="allow restarts to use a different number of "
+                                                                                "processors than previous partial run")
     parser.add_argument("input", help="input parameters toml file")
     args = parser.parse_args(args_list)
 
@@ -108,16 +110,40 @@ def sample(args, MPI, NS_comm, walker_comm):
     params = NS_comm.bcast(params, root=0)
     check_fill_defaults(params, param_defaults)
 
+    # override with command line arguments
+    for arg_name, arg_val in args.override_param:
+        arg_name_components = re.sub(r"^/", "", arg_name).split("/")
+
+        cur_param_dict = params
+        for arg_name_component in arg_name_components[:-1]:
+            cur_param_dict = cur_param_dict[arg_name_component]
+
+        arg_name_final = arg_name_components[-1]
+
+        if arg_name_final not in cur_param_dict:
+            raise ValueError(f"Failed to find final override param path component {arg_name_final} in params file dict {cur_param_dict}")
+
+        if isinstance(cur_param_dict[arg_name_final], bool):
+            if arg_val.lower() in ["t", "true"]:
+                cur_param_dict[arg_name_final] = True
+            elif arg_val.lower() in ["f", "false"]:
+                cur_param_dict[arg_name_final] = False
+            else:
+                raise ValueError("Unknown value {arg_val} for overriding bool param {arg_name}")
+        elif isinstance(cur_param_dict[arg_name_final], int):
+            cur_param_dict[arg_name_final] = int(arg_val)
+        elif isinstance(cur_param_dict[arg_name_final], float):
+            cur_param_dict[arg_name_final] = float(arg_val)
+        elif isinstance(cur_param_dict[arg_name_final], str):
+            cur_param_dict[arg_name_final] = arg_val
+        else:
+            raise ValueError(f"Can't override param of type {type(cur_param_dict[arg_name_final])}") 
+        warnings.warn(f"Overridden params file {arg_name} with {cur_param_dict[arg_name_final]}")
+
     params_global = params["global"]
 
-    # override params from CLI
-    if args.random_seed is not None:
-        params_global["random_seed"] = args.random_seed
-    if args.max_iter is not None:
-        params_global["max_iter"] = args.max_iter
-
     # output file prefix
-    output_filename_prefix = params_global["output_filename_prefix"] + args.output_filename_postfix
+    output_filename_prefix = params_global["output_filename_prefix"] + params_global["output_filename_prefix_extra"]
 
     # create outer nested sampling
     ns = NS(params["ns"], NS_comm, MPI, params_global["random_seed"], params["configs"], output_filename_prefix,
@@ -143,6 +169,12 @@ def sample(args, MPI, NS_comm, walker_comm):
     snapshot_interval = params_global["snapshot_interval"]
     stdout_report_interval_s = params_global["stdout_report_interval_s"]
     step_size_tune_interval = params_step_size_tune["interval"]
+    # WARNING: clone_history_file not restartable
+    if params_global["clone_history"]:
+        clone_history_file = open(f"{output_filename_prefix}.clone_history", "w")
+        clone_history_file.write(f'# {{"fields": ["loop_iter", "clone_source", "clone_target"], "n_walkers": {ns.n_configs_global}}}\n')
+    else:
+        clone_history_file = None
 
     ns_file_name = f"{output_filename_prefix}.NS_samples"
     traj_file_name = f"{output_filename_prefix}.traj{config_suffix}"
@@ -234,6 +266,11 @@ def sample(args, MPI, NS_comm, walker_comm):
         global_ind_of_clone_source = (global_ind_of_max + 1 + ns.rng_global.integers(0, ns.n_configs_global - 1)) % ns.n_configs_global
         rank_of_clone_source, local_ind_of_clone_source = ns.local_ind(global_ind_of_clone_source)
 
+        if clone_history_file is not None:
+            clone_history_file.write(f"{loop_iter} {global_ind_of_clone_source} {global_ind_of_max}\n")
+            if loop_iter % 1000 == 1000 - 1:
+                clone_history_file.flush()
+
         # write max to traj file
         if traj_interval > 0 and loop_iter % traj_interval == 0:
             if NS_comm.rank == 0:
@@ -293,6 +330,9 @@ def sample(args, MPI, NS_comm, walker_comm):
             ns.snapshot(loop_iter, output_filename_prefix)
 
         loop_iter += 1
+
+    if clone_history_file is not None:
+        clone_history_file.close()
 
 
 def main(args_list=None, mpi_finalize=True):

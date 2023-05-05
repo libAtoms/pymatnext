@@ -81,17 +81,20 @@ class NS:
             snapshot_state_file = old_state_files[-1]
             self.snapshot_iter = NS._iter_from_state_file(snapshot_state_file)
 
-            snapshot_config_file = snapshot_state_file.replace(".state.json", f".configs{self.NSConfig.filename_suffix}")
+            initial_config_file = snapshot_state_file.replace(".state.json", f".configs{self.NSConfig.filename_suffix}")
             with open(snapshot_state_file) as fin:
                 snapshot_state = json.load(fin)
         else:
             # no snapshot, generate from scratch
             snapshot_state = {}
-            snapshot_config_file = None
+            if params_ns["initial_config_file"] != "_NONE_":
+                initial_config_file = params_ns["initial_config_file"]
+            else:
+                initial_config_file = None
             self.snapshot_iter = -1
 
         self.init_rngs(random_seed, snapshot_state.get("rngs", None), different_nlocal=different_n_rng_local)
-        self.init_configs(params_configs, snapshot_config_file, extra=extra_config)
+        self.init_configs(params_configs, initial_config_file, extra=extra_config)
 
 
     def report_store(self, loop_iter):
