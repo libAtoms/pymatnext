@@ -59,8 +59,15 @@ def calc_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
     return (Z_term, log_shift)
 
 
-def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_extra_DOF, KS_volume_test):
-    """do an analysis at a single temperature
+def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_extra_DOF, p_entropy_min=5.0):
+    """Do an analysis at a single temperature
+
+    Note that some parameters (e.g. percentiles used for low and high extent of the contributing iterations,
+    amount of clipping of distribution at large iteration that indicates a problem) should probably be optional
+    arguments
+
+    Parameters
+    ----------
     T: float
         temperature
     Es: ndarray(float)
@@ -83,8 +90,8 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     n_extra_DOF: int
         number of extra degrees of freedom per atom that aren't included in Es (e.g. kinetic), to be
         added analytically to energies and specific heats
-    KS_volume_test: bool
-        do Kolmogorov-Smirnoff Gaussian distribution test on volumes
+    p_entropy_min: float, default 5
+        minimum value of entropy of probability distribution that indicates a problem (poor sampling, e.g. with P reweighting)
 
     Returns
     -------
@@ -137,28 +144,8 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     # also add the E_shift
     Helmholtz_F = -log_Z / beta + E_shift
 
-    Z_max = np.amax(Z_term)
-    low_percentile_config = np.where(Z_term > Z_max/10.0)[0][0]
-    high_percentile_config = np.where(Z_term > Z_max/10.0)[0][-1]
-    v_low_percentile_config = np.where(Z_term > Z_max/100.0)[0][0]
-    v_high_percentile_config = np.where(Z_term > Z_max/100.0)[0][-1]
     mode_config = np.argmax(Z_term)
 
-    problem = False
-    if v_high_percentile_config == len(Z_term)-1:
-        # warnings.warn('T may be inaccurate - significant contribution from last iteration')
-        problem = True
-
-    if KS_volume_test:
-        if Vs is None:
-            raise RuntimeError('KS_volume_test requires volumes')
-        V_histogram = np.histogram(Vs[v_low_percentile_config:v_high_percentile_config], bins=30,
-                                   weights=Z_term[v_low_percentile_config:v_high_percentile_config], density=True)
-        ks_gaussianity = ks_test_gaussianity_histogram(V_histogram)
-    else:
-        ks_gaussianity = None
-
-    Z_fract = np.sum(Z_term[low_percentile_config:high_percentile_config + 1]) / Z_term_sum
 
     results_dict = {'log_Z': log_Z,
                     'FG': Helmholtz_F,
@@ -170,40 +157,33 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
         results_dict['V'] = V
         results_dict['thermal_exp'] = thermal_exp
 
-    if ks_gaussianity is not None:
-        results_dict['ks_gaussianity'] = ks_gaussianity
+    # compute range of configs that contributes significantly to sum
+    Z_term_cumsum = np.cumsum(Z_term)
+    low_percentile_config = np.where(Z_term_cumsum < 0.01 * Z_term_sum)[0][-1]
+    high_percentile_config = np.where(Z_term_cumsum > 0.99 * Z_term_sum)[0][0] + 1
+    high_percentile_config = min(high_percentile_config, len(Z_term) - 1)
+
+    probabilities = Z_term / Z_term_sum
+    probabilities = probabilities[np.where(probabilities > 0.0)]
+    p_entropy = -np.sum(probabilities * np.log(probabilities))
 
     results_dict.update({'low_percentile_config': low_percentile_config,
                          'mode_config': mode_config,
                          'high_percentile_config': high_percentile_config,
-                         'Z_fract': Z_fract})
+                         'p_entropy': p_entropy})
 
     if extra_vals is not None and len(extra_vals) > 0:
         results_dict['extra_vals'] = extra_vals_out
 
+    # Finally, check for sampling problems
+    problem = False
+    # one way to get bad sampling is to be too dominated by a few configurations
+    problem |= p_entropy < p_entropy_min
+    # another is to clip the top (high iteration #) of the distribution
+    low_percentile_mean = np.mean(Z_term[low_percentile_config:low_percentile_config + 1000] / Z_term_sum)
+    high_percentile_mean = np.mean(Z_term[high_percentile_config - 1000:high_percentile_config] / Z_term_sum)
+    problem |= high_percentile_mean / low_percentile_mean > 2.0
+
     results_dict['problem'] = 'true' if problem else 'false'
 
     return results_dict
-
-
-def ks_test_gaussianity_histogram(histogram):
-    """calculate Kolmogorov-Smirnoff test for Gaussianity of histogram
-    Parameters
-    ----------
-    histogram: histogram returned by np.histogram with density=True
-
-    Returns
-    -------
-    dev_max: double max deviation from Gaussianity
-    """
-
-    dev_max = 0.0
-    histo_mean =    np.sum(histogram[0] * (histogram[1][1:]-histogram[1][0:-1]) * (histogram[1][1:]+histogram[1][0:-1])/2.0 )
-    histo_2nd_mom = np.sum(histogram[0] * (histogram[1][1:]-histogram[1][0:-1]) * ((histogram[1][1:]+histogram[1][0:-1])/2.0)**2 )
-    histo_std_dev = np.sqrt(histo_2nd_mom - histo_mean**2)
-    for ibin in range(1,len(histogram[0])):
-        numerical_cumul = np.sum(histogram[0][0:ibin] * (histogram[1][1:ibin+1]-histogram[1][0:ibin]))
-        analytical_cumul = stats.norm.cdf(histogram[1][ibin], histo_mean, histo_std_dev)
-        dev_max = max(dev_max, np.abs( numerical_cumul - analytical_cumul))
-    return dev_max
-
