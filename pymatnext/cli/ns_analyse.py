@@ -43,6 +43,7 @@ def main():
     pressure_g.add_argument('--delta_P_GPa', '-P',  help="""delta pressure to use for reweighting (works best with flat V prior) in GPa""", type=float)
     pressure_g.add_argument('--delta_P',  help="""delta pressure to use for reweighting (works best with flat V prior)""", type=float)
     p.add_argument('--entropy', '-S', action='store_true', help="""compute and print entropy (relative to entropy of lowest T structure""")
+    p.add_argument('--probability_entropy_minimum', type=float, help="""probability entropy mininum that indicates a problem with sampling""", default=5.0)
     p.add_argument('--plot', '-p', nargs='*', help="""column names to plot, or optionally 'log(colname)'. """
                                                    """If no column names provided, list allowed names and abort""")
     p.add_argument('--plot_together', help="""output filename for combined plot""")
@@ -197,7 +198,8 @@ def main():
             for i_T in iterator:
                 T = args.Tmin + i_T * args.dT
                 results_dict = utils.analyse_T(T, Es, E_min, Vs, vals, log_a, flat_V_prior, natoms,
-                                               args.kB, header.get('n_extra_DOF_per_atom', 3), args.delta_P is not None and args.delta_P != 0.0)
+                                               args.kB, header.get('n_extra_DOF_per_atom', 3),
+                                               p_entropy_min=args.probability_entropy_minimum)
                 if item_keys is None:
                     item_keys = list(results_dict.keys())
                     try:
@@ -268,11 +270,10 @@ def main():
                    'S' : ('S', '{:11g}'),
                    'low_percentile_config' : ('low % i', '{:10.0f}'),
                    'mode_config' : ('mode i', '{:10.0f}'),
-                   'high_percentile_config' : ('high %', '{:10.0f}'),
-                   'Z_fract' : ('frac(Z)', '{:7.3f}'),
+                   'high_percentile_config' : ('high % i', '{:10.0f}'),
+                   'p_entropy' : ('ent(p)', '{:6.3f}'),
                    'V' : ('V', '{:8g}'),
                    'thermal_exp' : ('alpha', '{:9.3g}'),
-                   'ks_gaussianity' : ('K-S(V)', '{:8g}'),
                    'problem' : ('problem', '{:5s}')}
 
         extensive_N = header.get('extensive', None)
