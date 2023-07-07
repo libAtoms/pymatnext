@@ -160,7 +160,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         if "Lost atoms" in exc_str:
             # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
             ns_atoms.end_calculator()
-            ns_atoms.init_calculator()
+            ns_atoms.init_calculator(skip_initial_store=True)
         reject = True
 
     if not reject:
@@ -170,6 +170,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         atoms.wrap()
 
     return [("pos_gmc_each_atom", 1, 0 if reject else 1)]
+
 
 def walk_cell(ns_atoms, Emax, rng):
     """walk atomic cell with MC
@@ -223,7 +224,7 @@ def walk_cell(ns_atoms, Emax, rng):
         if "Lost atoms" in exc_str:
             # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
             ns_atoms.end_calculator()
-            ns_atoms.init_calculator()
+            ns_atoms.init_calculator(skip_initial_store=True)
         failed = True
 
     if not failed:
