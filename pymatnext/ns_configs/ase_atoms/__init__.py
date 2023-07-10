@@ -259,9 +259,14 @@ class NSConfig_ASE_Atoms():
         self.calc = None
 
 
-    def init_calculator(self):
+    def init_calculator(self, skip_initial_store=False):
         """Initialize calculator.  Not part of constructor since some calculators (e.g. LAMMPS)
         cannot be pickled for mpi4py communication.
+
+        Parameters
+        ----------
+        skip_initial_store: bool, default False
+            skip storing the results of the initial calculation
         """
 
         params_calc = self._params_calc
@@ -329,7 +334,7 @@ class NSConfig_ASE_Atoms():
             raise NotImplementedError(f"Unknown calculator type {self.calc_type}")
 
         # calculate energy/forces and save values
-        self.initial_calc_and_store()
+        self.initial_calc_and_store(skip_initial_store)
 
 
     def _rotate_to_lammps(self):
@@ -453,32 +458,38 @@ class NSConfig_ASE_Atoms():
         self.atoms.make_contiguous()
 
 
-    def initial_calc_and_store(self):
+    def initial_calc_and_store(self, skip_initial_store=False):
         """Calculate and store the results of a calculator, as well as other NS
         quantities, in info/arrays without breaking contiguous storage.  Currently
         hard-wired to free_energy in NS_energy and forces in NS_forces, as well
         as shift of raw energy related to volume (if constant pressure) and counts of
         each species (if constant chemical potential)
+
+        Parameters
+        ----------
+        skip_initial_store: bool, default False
+            skip storing the results of the initial calculation
         """
         if self.calc_type == "ASE":
             self.calc.calculate(self.atoms, properties=["free_energy", "forces"], system_changes=all_changes)
-            self.atoms.info["NS_energy"][...] = self.calc.results.get("free_energy", self.calc.results.get("energy"))
-            self.atoms.arrays["NS_forces"][...] = self.calc.results["forces"]
+            if not skip_initial_store:
+                self.atoms.info["NS_energy"][...] = self.calc.results.get("free_energy", self.calc.results.get("energy"))
+                self.atoms.arrays["NS_forces"][...] = self.calc.results["forces"]
         elif self.calc_type == "LAMMPS":
             self.calc.reset_box([0.0, 0.0, 0.0], np.diag(self.atoms.cell), self.atoms.cell[0, 1], self.atoms.cell[1, 2], self.atoms.cell[0, 2])
             self.calc.create_atoms(len(self.atoms), list(np.arange(1, 1 + len(self.atoms))), self.type_of_Z[self.atoms.numbers],
                                    self.atoms.positions.reshape((-1)), self.atoms.arrays["NS_velocities"].reshape((-1)))
             self.calc.command("run 0")
-            self.atoms.info["NS_energy"][...] = self.calc.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR)
-            self.atoms.arrays["NS_forces"][...] = self.calc.numpy.extract_atom("f")
+            if not skip_initial_store:
+                self.atoms.info["NS_energy"][...] = self.calc.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR)
+                self.atoms.arrays["NS_forces"][...] = self.calc.numpy.extract_atom("f")
 
             # do an initial 'fix NS' so that every walk can start with 'unfix NS'
             self.calc.command("fix NS all ns/gmc 1 0.0")
 
-        self.atoms.info["NS_energy_shift"][...] = self.calc_NS_energy_shift()
-
-
-        self.update_NS_quantities()
+        if not skip_initial_store:
+            self.atoms.info["NS_energy_shift"][...] = self.calc_NS_energy_shift()
+            self.update_NS_quantities()
 
 
     def update_NS_quantities(self):
