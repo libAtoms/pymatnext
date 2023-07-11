@@ -197,7 +197,7 @@ def walk_cell(ns_atoms, Emax, rng):
     # for LAMMPS RanMars RNG
     lammps_seed = rng.integers(1, 900000000)
 
-    step_size_volume = len(ns_atoms.atoms) * ns_atoms.step_size["cell_volume_per_atom"]
+    step_size_volume = len(atoms) * ns_atoms.step_size["cell_volume_per_atom"]
     step_size_shear = ns_atoms.step_size["cell_shear"]
     step_size_stretch = ns_atoms.step_size["cell_stretch"]
 
@@ -236,18 +236,24 @@ def walk_cell(ns_atoms, Emax, rng):
         E, F = extract_E_F(ns_atoms.calc, True)
         # set atoms from current lammps internal state
         set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
+        # Not clear why cell moves require wrapping, but in practice they appear to
+        atoms.wrap()
 
     # gather number of attempted and accepted moves from fix
     n_att = {}
     n_acc = {}
     for submove_i, submove_type in enumerate(["volume", "stretch", "shear"]):
-        try:
-            n_att[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 0, 0))
-            n_acc[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 1, 0))
-        except Exception as exc:
-            warnings.warn(f"LAMMPS extract_fix failed with {exc}, ignoring")
-            n_att[submove_type] = 0
+        if failed:
+            n_att[submove_type] = int(ns_atoms.walk_traj_len['cell'] * submove_probs[submove_type])
             n_acc[submove_type] = 0
+        else:
+            try:
+                n_att[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 0, 0))
+                n_acc[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 1, 0))
+            except Exception as exc:
+                warnings.warn(f"LAMMPS extract_fix failed with {exc}, ignoring")
+                n_att[submove_type] = 0
+                n_acc[submove_type] = 0
 
     return [("cell_volume_per_atom", n_att["volume"], n_acc["volume"]),
             ("cell_shear", n_att["shear"], n_acc["shear"]),

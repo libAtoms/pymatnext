@@ -476,7 +476,9 @@ class NSConfig_ASE_Atoms():
                 self.atoms.info["NS_energy"][...] = self.calc.results.get("free_energy", self.calc.results.get("energy"))
                 self.atoms.arrays["NS_forces"][...] = self.calc.results["forces"]
         elif self.calc_type == "LAMMPS":
-            self.calc.reset_box([0.0, 0.0, 0.0], np.diag(self.atoms.cell), self.atoms.cell[0, 1], self.atoms.cell[1, 2], self.atoms.cell[0, 2])
+            # WARNING: this duplicates code in walks_lammps.set_lammps_from_atoms, and at least at one point
+            # there appears to have been a wrong implementation here.  Would be good to refactor somehow
+            self.calc.reset_box([0.0, 0.0, 0.0], np.diag(self.atoms.cell), self.atoms.cell[1, 0], self.atoms.cell[2, 1], self.atoms.cell[2, 0])
             self.calc.create_atoms(len(self.atoms), list(np.arange(1, 1 + len(self.atoms))), self.type_of_Z[self.atoms.numbers],
                                    self.atoms.positions.reshape((-1)), self.atoms.arrays["NS_velocities"].reshape((-1)))
             self.calc.command("run 0")

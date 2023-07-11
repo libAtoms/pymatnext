@@ -311,7 +311,7 @@ class NS:
         Parameters
         ----------
         n_configs: int, default 1
-            number of configs to walk
+            number of configs to walk on each MPI process
         min_accept_rate: float, default 0.25
             minimum allowed acceptance rate
         max_accept_rate: float, default 0.5
