@@ -61,9 +61,6 @@ Walks consist of blocks of a several steps of a single type (position or cell or
    prior, which is the correct one for ensemble averages, or with a flat prior, which requires
    reweighting of the sampled configurations during analysis.  
 
- - Non-zero pressure for total energy can not be applied for LAMMPS, only ASE Calculators (but 
-   calculator may use `LAMMPSlib`, although this may be lower efficiency than the LAMMPS `fix`es).
-
 #### Species
 
  - Atom species sampled with Monte Carlso swap or semi-grand-canonical (total atom
@@ -93,13 +90,22 @@ patch -p1 < $patch_file
 The `NS` package must then be added to enable the `fix ns/*` commands, and LAMMPS
 must be recompiled *without MPI support*.  The LAMMPS python interface must then be installed.
 
+If using `cmake`, this can be done by adding `NS` to the section `set(STANDARD_PACKAGES...`,
+and adding `-D PKG_NS=ON` to the `cmake` command (in addition to 
+```
+-D BUILD_MPI=OFF
+-D BUILD_SHARED_LIBS=ON
+-D LAMMPS_EXCEPTIONS=ON
+```
+and whatever other options are needed).  Installing the python package is most easily done with 
+`make install-python` after the regular `make`.
+
 # TODO
 
 (in order of priority?)
 
  - refactor `<prefix>.NS_samples` and `<prefix>.traj.<suffix>` truncation code (minor)
  - create `ABC` for `NSConfig` (med)
- - apply pressure in LAMMPS `fix ns/cellmc` (med)
  - sample positions with TE-HMC (major)
 
 ## Done
