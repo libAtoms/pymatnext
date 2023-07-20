@@ -1,6 +1,19 @@
+diff -N -u -r orig/cmake/CMakeLists.txt new/cmake/CMakeLists.txt
+--- orig/cmake/CMakeLists.txt	2023-07-20 17:31:29.420809479 -0400
++++ new/cmake/CMakeLists.txt	2023-07-20 17:31:29.454809162 -0400
+@@ -305,7 +305,8 @@
+   UEF
+   VORONOI
+   VTK
+-  YAFF)
++  YAFF
++  NS)
+ 
+ set(SUFFIX_PACKAGES CORESHELL GPU KOKKOS OPT INTEL OPENMP)
+ 
 diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 --- orig/src/NS/fix_ns_cellmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.cpp	2023-04-07 08:24:10.058143227 -0400
++++ new/src/NS/fix_ns_cellmc.cpp	2023-07-20 17:16:05.952402361 -0400
 @@ -0,0 +1,474 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -478,7 +491,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 --- orig/src/NS/fix_ns_cellmc.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.h	2023-04-04 21:47:03.744996335 -0400
++++ new/src/NS/fix_ns_cellmc.h	2023-07-20 17:16:05.953402352 -0400
 @@ -0,0 +1,74 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -556,7 +569,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns_gmc.cpp new/src/NS/fix_ns_gmc.cpp
 --- orig/src/NS/fix_ns_gmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_gmc.cpp	2022-12-08 17:17:01.000000000 -0500
++++ new/src/NS/fix_ns_gmc.cpp	2023-07-20 17:16:05.953402352 -0400
 @@ -0,0 +1,201 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -761,7 +774,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.cpp new/src/NS/fix_ns_gmc.cpp
 +
 diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 --- orig/src/NS/fix_ns_gmc.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_gmc.h	2022-12-08 17:17:01.000000000 -0500
++++ new/src/NS/fix_ns_gmc.h	2023-07-20 17:16:05.954402343 -0400
 @@ -0,0 +1,61 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -826,7 +839,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 --- orig/src/NS/fix_ns_type.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.cpp	2023-04-10 16:27:13.950098439 -0400
++++ new/src/NS/fix_ns_type.cpp	2023-07-20 17:16:05.954402343 -0400
 @@ -0,0 +1,341 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -1171,7 +1184,7 @@ diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_type.h new/src/NS/fix_ns_type.h
 --- orig/src/NS/fix_ns_type.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.h	2022-12-08 17:17:01.000000000 -0500
++++ new/src/NS/fix_ns_type.h	2023-07-20 17:16:05.955402333 -0400
 @@ -0,0 +1,70 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
