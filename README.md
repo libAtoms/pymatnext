@@ -90,8 +90,9 @@ patch -p1 < $patch_file
 The `NS` package must then be added to enable the `fix ns/*` commands, and LAMMPS
 must be recompiled *without MPI support*.  The LAMMPS python interface must then be installed.
 
-If using `cmake`, this can be done by adding `NS` to the section `set(STANDARD_PACKAGES...`,
-and adding `-D PKG_NS=ON` to the `cmake` command (in addition to 
+If using `cmake`, this can be done by adding `NS` to the section `set(STANDARD_PACKAGES...`
+(the patch file in `pymatnext/extras/lammps.patch` should do this), and adding `-D PKG_NS=ON` to the `cmake` 
+command (in addition to 
 ```
 -D BUILD_MPI=OFF
 -D BUILD_SHARED_LIBS=ON
