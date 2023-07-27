@@ -495,17 +495,19 @@ class NS:
             for local_config in self.local_configs:
                 local_config.send(0, self.comm, self.MPI)
 
+        # gather states of all local rngs
         state = {}
         state["rngs"] = self.write_rngs()
-        with open(output_filename_prefix_iter + ".state.json", "w") as fout:
-            json.dump(state, fout)
+        if self.comm.rank == 0:
+            with open(output_filename_prefix_iter + ".state.json", "w") as fout:
+                json.dump(state, fout)
 
         # make sure writes did something
         if self.comm.rank == 0:
             if Path(output_filename_prefix_iter + f".configs{config_suffix}").stat().st_size <= 0:
                 raise RuntimeError(f"Failed to write to snapshot {output_filename_prefix_iter}.configs{config_suffix} file, refusing to continue")
             if Path(output_filename_prefix_iter + ".state.json").stat().st_size <= 0:
-                raise RuntimeError("Failed to write to snapshot {output_filename_prefix_iter}.state.json file, refusing to continue")
+                raise RuntimeError(f"Failed to write to snapshot {output_filename_prefix_iter}.state.json file, refusing to continue")
 
         # wipe older snapshots
         if self.comm.rank == 0 and len(old_state_files) > 0:
