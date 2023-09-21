@@ -221,6 +221,7 @@ def main():
             ax[a_name].set_xlabel(axis_labels[0])
             ax[a_name].set_ylabel(axis_labels[1])
 
+    linetypes = ['-', '--', '-.']
     outfiles = {}
     for analysis in args.analysis:
         outfiles[analysis] = open(args.output + '.' + analysis + '.data', 'w')
@@ -233,7 +234,7 @@ def main():
                 outfiles[analysis].write(' '.join([str(vv) for vv in v]) + '\n')
             outfiles[analysis].write('\n\n')
             if args.plot:
-                ax[analysis].plot(res[0], res[1], '-', color=f'C{T_i}', label=f'T = {T} K')
+                ax[analysis].plot(res[0], res[1], linetypes[T_i // 10], color=f'C{T_i}', label=f'T = {T} K')
     for outfile in outfiles.values():
         outfile.close()
 
