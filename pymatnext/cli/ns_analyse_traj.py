@@ -49,7 +49,7 @@ def main():
     p.add_argument('--delta_P', '-P',  help="""delta pressure to use for reweighting with flat V prior""", type=float)
 
     p.add_argument('--analysis', '-a', action='append', help=
-                       """analysis module.  Module name (which defines a function """
+                       """analysis module.  Single string consistent of module name (which defines a function """
                        """'analysis(atoms, arg, arg ...)', followed by JSON string defining args or kwargs (not both). """
                        f"""Predefined modules (in pymatnext.analysis.tools): {analysis_modules}""", required=True)
     p.add_argument('--plot', '-p', action='store_true', help="""quick and dirty plot of analysis results""")
@@ -63,7 +63,7 @@ def main():
     p.add_argument('--ns_iter_field', help="""info field for NS iter #""", default="NS_iter")
     p.add_argument('--ns_E_field', help="""info field for NS energy/enthalpy""")
 
-    p.add_argument('--output', '-o', help="""filename base for values and figures of each analysis""")
+    p.add_argument('--output', '-o', help="""filename base for values and figures of each analysis""", required=True)
     p.add_argument('trajfile', nargs='+', help="""input trajectory files""")
 
     args = p.parse_args()
