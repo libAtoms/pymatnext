@@ -23,7 +23,15 @@ def main():
 
     analysis_modules = " ".join([mod for mod in dir(import_module('pymatnext.analysis.tools')) if not mod.startswith("__")])
 
-    p = argparse.ArgumentParser(description="""Analyze NS trajectory by running arbitrary python modules that define an `analysis()` function""")
+    p = argparse.ArgumentParser(description="""Analyze NS trajectory
+    by running arbitrary python modules that define an `analysis()`
+    function.  Function must accept a (first) argument of `atoms`
+    (`ase.atoms.Atoms`) and return an `np.ndarray`, which will be
+    summed over the NS trajectory with weights from the NS process.
+    For built-in plotting (`--plot`), it is assumed that there are two
+    rows containing the x and y values of the analysis.  In this case
+    the function must accept a `header` argument, and when it is `True`
+    it must return a list of two strings with labels for each row.""")
 
     gT = p.add_mutually_exclusive_group()
     gT.add_argument('--temperature', '-T',  nargs='+', help="""temperature""",type=float)
