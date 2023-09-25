@@ -60,6 +60,7 @@ def main():
     p.add_argument('--quiet', '-q', action='store_true', help="""No progress output""")
     p.add_argument('--no_cache', dest='cache', action='store_false', help="""do not read or write analysis results to cache files""")
 
+    p.add_argument('--ns_iters', '-i',  help="""range expression for iterations to use""")
     p.add_argument('--ns_iter_field', help="""info field for NS iter #""", default="NS_iter")
     p.add_argument('--ns_E_field', help="""info field for NS energy/enthalpy""")
 
@@ -80,7 +81,28 @@ def main():
     else:
         sum=np.sum
 
-    def traj_configs(trajfiles):
+    def traj_configs(trajfiles, ns_iters):
+        ns_iters = ns_iters.split(":")
+        ns_iters += [''] * (3 - len(ns_iters))
+        if ns_iters[0] == '':
+            min_iter = 0
+        else:
+            min_iter = int(ns_iters[0])
+            if min_iter < 0:
+                raise ValueError(f"ns_iters range expression min {min_iter} must be >= 0")
+        if ns_iters[1] == '':
+            max_iter = None
+        else:
+            max_iter = int(ns_iters[1])
+            if max_iter <= 0:
+                raise ValueError(f"ns_iters range expression max {max_iter} must be > 0")
+        if ns_iters[2] == '':
+            step_iter = 1
+        else:
+            step_iter = int(ns_iters[2])
+            if step_iter <= 0:
+                raise ValueError(f"ns_iters range expression step {step_iter} must be > 0")
+
         trajfile_iters = []
         next_config = []
         for trajfile in trajfiles:
@@ -96,7 +118,11 @@ def main():
             assert next_config[lowest_iter_i].info[args.ns_iter_field] > last_iter
             last_iter = next_config[lowest_iter_i].info[args.ns_iter_field]
 
-            yield next_config[lowest_iter_i]
+            # check for configs in selected range
+            if max_iter is not None and last_iter >= max_iter:
+                break
+            if last_iter >= min_iter and last_iter % step_iter == 0:
+                yield next_config[lowest_iter_i]
 
             try:
                 next_config[lowest_iter_i] = next(trajfile_iters[lowest_iter_i])
@@ -162,13 +188,16 @@ def main():
                 sys.stderr.write(f'Loaded analysis {analysis_str} from cached file, got shape {extra_vals[analysis_i].shape}\n')
 
     if args.quiet:
-        iterator = traj_configs(args.trajfile)
+        iterator = traj_configs(args.trajfile, args.ns_iters)
     else:
-        iterator = tqdm(traj_configs(args.trajfile))
+        iterator = tqdm(traj_configs(args.trajfile, args.ns_iters))
+        iterator.set_description(f"iter <skipping>")
     for at in iterator:
         if all(at.numbers == 0):
             at.numbers = at.arrays['type']
         iters.append(at.info[args.ns_iter_field])
+        if isinstance(iterator, tqdm):
+            iterator.set_description(f"iter {iters[-1]}")
         if args.ns_E_field is None:
             Es.append(at.info["NS_quantities"][0])
         else:
