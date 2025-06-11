@@ -1,7 +1,4 @@
-from copy import deepcopy
 import importlib
-
-import numpy as np
 
 from pymatnext.params import check_fill_defaults
 from .loop_exit_params import param_defaults

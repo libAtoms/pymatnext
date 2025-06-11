@@ -39,7 +39,7 @@ jobs:
         run: conda install pip
 
       - name: Install pytest requirements from pip (specific pymatnext dependencies will be automatically installed when it is)
-        run: pip install wheel setuptools flake8 pytest pytest-cov
+        run: pip install wheel setuptools ruff pytest pytest-cov
 
       - name: Install latest ASE from gitlab
         run: pip install git+https://gitlab.com/ase/ase.git
@@ -59,12 +59,10 @@ jobs:
           conda install -c conda-forge mpi4py openmpi pytest-mpi
           pip install mpipool
 
-      - name: Lint with flake8
+      - name: Lint with ruff
         run: |
           # stop the build if there are Python syntax errors or undefined names
-          flake8 pymatnext/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings.
-          flake8 pymatnext/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+          ruff check pymatnext
 
       - name: Test with pytest - plain
         if: env.coverage-on-version != matrix.python-version

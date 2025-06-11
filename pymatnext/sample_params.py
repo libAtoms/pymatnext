@@ -1,8 +1,6 @@
 """dict with template of parameters for [global] section"
 """
 
-import numpy as np
-
 param_defaults = {
     "global": {
         "output_filename_prefix": "NS",

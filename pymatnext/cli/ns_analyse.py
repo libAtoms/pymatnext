@@ -15,17 +15,17 @@ from pymatnext.analysis import utils
 try:
     import ase.units
     GPa = ase.units.GPa
-except:
+except ModuleNotFoundError:
     GPa = None
 
 try:
     from mpi4py import MPI
-except:
+except ModuleNotFoundError:
     MPI = None
 
 try:
     from matplotlib.figure import Figure
-except:
+except ModuleNotFoundError:
     Figure = None
 
 def main():
@@ -62,9 +62,9 @@ def main():
         args.nT = 1
 
     if args.accurate_sum:
-        sum=math.fsum
+        sum_f = math.fsum
     else:
-        sum=np.sum
+        sum_f = np.sum
 
     if MPI is not None:
         comm_rank = MPI.COMM_WORLD.Get_rank()
@@ -102,10 +102,10 @@ def main():
         analysis_header = None
         with open(infile) as fin:
             # find header, either real data or previous analysis
-            for l in fin:
-                if l.startswith('#'):
+            for line in fin:
+                if line.startswith('#'):
                     try:
-                        header = json.loads(l[1:])
+                        header = json.loads(line[1:])
                         if isinstance(header, list):
                             analysis_header = header
                             header = None
@@ -126,12 +126,12 @@ def main():
 
             if analysis_header is None:
                 # read real sampled data
-                for l_i, l in enumerate(fin):
+                for l_i, line in enumerate(fin):
                     if args.line_end is not None and l_i >= args.line_end:
                         break
                     if l_i < args.line_skip or l_i % args.interval != 0:
                         continue
-                    f = l.split()
+                    f = line.split()
                     ## should we ignore certain kinds of malformed lines?
                     ## try:
                     it = int(f[0])
@@ -199,7 +199,8 @@ def main():
                 T = args.Tmin + i_T * args.dT
                 results_dict = utils.analyse_T(T, Es, E_min, Vs, vals, log_a, flat_V_prior, natoms,
                                                args.kB, header.get('n_extra_DOF_per_atom', 3),
-                                               p_entropy_min=args.probability_entropy_minimum)
+                                               p_entropy_min=args.probability_entropy_minimum,
+                                               sum_f=sum_f)
                 if item_keys is None:
                     item_keys = list(results_dict.keys())
                     try:
@@ -225,7 +226,8 @@ def main():
             try:
                 data = MPI.COMM_WORLD.gather(data, root = 0)
                 data = [item for sublist in data for item in sublist]
-            except:
+            except Exception as exc:
+                print("BOB got exception", exc)
                 pass
 
         else:
@@ -234,14 +236,14 @@ def main():
             T_max = args.Tmin + (args.nT - 1) * args.dT
             data = []
             with open(infile) as fin:
-                for l in fin:
-                    if l.startswith('#'):
+                for line in fin:
+                    if line.startswith('#'):
                         continue
-                    fields = l.strip().split()
+                    fields = line.strip().split()
                     for f_i, f in enumerate(fields):
                         try:
                             fields[f_i] = float(f)
-                        except:
+                        except ValueError:
                             fields[f_i] = f
 
                     if fields[0] >= args.Tmin and fields[0] <= T_max:

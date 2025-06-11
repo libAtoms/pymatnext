@@ -1,7 +1,5 @@
 import warnings
 
-import numpy as np
-
 import lammps
 
 # avoiding every lammps fix from having to do the full energy shift is useful
@@ -140,7 +138,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
     -------
     [("pos_gmc_each_atom", 1, acc)] with acc 0 for rejected trajectory and 1 for accepted
     """
-    ns_atoms.calc.command(f"unfix NS")
+    ns_atoms.calc.command("unfix NS")
     atoms = ns_atoms.atoms
     # for LAMMPS RanMars RNG
     lammps_seed = rng.integers(1, 900000000)
@@ -194,7 +192,7 @@ def walk_cell(ns_atoms, Emax, rng):
      ("cell_stretch", n_att, n_acc)] with n_att and n_acc number of attempted and accepted
      move for each submove type
     """
-    ns_atoms.calc.command(f"unfix NS")
+    ns_atoms.calc.command("unfix NS")
     atoms = ns_atoms.atoms
     # for LAMMPS RanMars RNG
     lammps_seed = rng.integers(1, 900000000)
@@ -277,7 +275,7 @@ def walk_type(ns_atoms, Emax, rng):
     -------
     []: empty list
     """
-    ns_atoms.calc.command(f"unfix NS")
+    ns_atoms.calc.command("unfix NS")
     atoms = ns_atoms.atoms
     # for LAMMPS RanMars RNG
     lammps_seed = rng.integers(1, 900000000)

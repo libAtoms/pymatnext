@@ -137,7 +137,6 @@ def walk_cell(ns_atoms, Emax, rng):
         atoms.prev_cell[...] = atoms.cell.array
         move = rng.choice(submoves, p=probs)
         delta_V = 0.0
-        reject = False
         n_att[move] += 1
         if move == "volume":
             orig_V = atoms.get_volume()

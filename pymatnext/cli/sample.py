@@ -6,7 +6,6 @@ import warnings
 import re
 
 import time
-import importlib
 import pprint
 import itertools
 import json
@@ -15,7 +14,6 @@ import traceback
 from argparse import ArgumentParser
 
 import toml
-import numpy as np
 
 from pymatnext.ns import NS
 from pymatnext.params import check_fill_defaults
@@ -43,9 +41,9 @@ def init_MPI():
         # from https://stackoverflow.com/questions/49868333/fail-fast-with-mpi4py
         def mpiabort_excepthook(type, value, traceback_obj):
             sys.stderr.write(f"{MPI.COMM_WORLD.rank} Aborting because of exception {value}\n")
-            for l in traceback.format_tb(traceback_obj):
-                for ll in l.splitlines():
-                    sys.stderr.write(f"{MPI.COMM_WORLD.rank} {ll.rstrip()}\n")
+            for line in traceback.format_tb(traceback_obj):
+                for line_split in line.splitlines():
+                    sys.stderr.write(f"{MPI.COMM_WORLD.rank} {line_split.rstrip()}\n")
             sys.stderr.flush()
             MPI.COMM_WORLD.Abort()
             sys.__excepthook__(type, value, traceback_obj)
@@ -190,7 +188,7 @@ def sample(args, MPI, NS_comm, walker_comm):
             # truncate .NS_samples file
             f_samples = open(ns_file_name, "r+")
             # skip header
-            l = f_samples.readline()
+            _ = f_samples.readline()
             line_i = None
             while True:
                 line = f_samples.readline()

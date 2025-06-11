@@ -5,7 +5,7 @@ from pathlib import Path
 
 try:
     from matplotlib.figure import Figure
-except:
+except ModuleNotFoundError:
     Figure = None
 
 import sys
@@ -77,9 +77,9 @@ def main():
             raise RuntimeError("Need --samples_file OR --walkers and --cull")
 
     if args.accurate_sum:
-        sum=math.fsum
+        sum_f = math.fsum
     else:
-        sum=np.sum
+        sum_f = np.sum
 
     def traj_configs(trajfiles, ns_iters):
         ns_iters = ns_iters.split(":")
@@ -135,7 +135,7 @@ def main():
         analysis_mod_json = analysis_str.split(maxsplit=1)
         try:
             analysis_func = import_module(analysis_mod_json[0]).analysis
-        except:
+        except ModuleNotFoundError:
             analysis_func = import_module('pymatnext.analysis.tools.' + analysis_mod_json[0]).analysis
 
         analysis_args = []
@@ -159,7 +159,6 @@ def main():
     # check for cached
     found_cached = []
     if args.cache:
-        trajfile_a = [np.asarray(list(f)) for f in args.trajfile]
         not_all = False
         for i in range(len(args.trajfile[0])):
             if not all([f[i] == args.trajfile[0][i] for f in args.trajfile]):
@@ -191,7 +190,7 @@ def main():
         iterator = traj_configs(args.trajfile, args.ns_iters)
     else:
         iterator = tqdm(traj_configs(args.trajfile, args.ns_iters))
-        iterator.set_description(f"iter <skipping>")
+        iterator.set_description("iter <skipping>")
     for at in iterator:
         if all(at.numbers == 0):
             at.numbers = at.arrays['type']
@@ -256,7 +255,7 @@ def main():
         outfiles[analysis] = open(args.output + '.' + analysis + '.data', 'w')
     for T_i, T in enumerate(args.temperature):
         results_dict = utils.analyse_T(T, Es, E_min, Vs, extra_vals, log_a, args.flat_V_prior, natoms,
-                                       args.kB, 0, args.delta_P is not None and args.delta_P != 0.0)
+                                       args.kB, 0, args.delta_P is not None and args.delta_P != 0.0, sum_f=sum_f)
         for analysis, res in zip(args.analysis, results_dict['extra_vals']):
             outfiles[analysis].write(f'# T {T} analysis {analysis}\n')
             for v in res.T:

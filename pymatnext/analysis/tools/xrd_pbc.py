@@ -1,4 +1,7 @@
 import numpy as np
+
+from ase.utils.xrdebye import wavelengths
+
 ASF_c = np.asarray([
     0.0, 
     0.001305, 
@@ -363,8 +366,6 @@ ASF_b = np.asarray([
 [    0.0, 0.0, 0.0, 0.0]])
 
 last_params = {}
-
-from ase.utils.xrdebye import wavelengths
 
 def analysis(atoms=None, twotheta_range=[1.0, 180.0], twotheta_n=None, wavelength=wavelengths['CuKa1'], do_Lorentz=False, header=False):
     """do XRD analysis on one atomic config
