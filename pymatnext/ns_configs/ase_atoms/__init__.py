@@ -484,7 +484,8 @@ class NSConfig_ASE_Atoms():
             self.calc.command("run 0")
             if not skip_initial_store:
                 self.atoms.info["NS_energy"][...] = self.calc.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR)
-                self.atoms.arrays["NS_forces"][...] = self.calc.numpy.extract_atom("f")
+                nlocal = self.calc.extract_global("nlocal")
+                self.atoms.arrays["NS_forces"][...] = self.calc.numpy.extract_atom("f")[:nlocal]
 
             # do an initial 'fix NS' so that every walk can start with 'unfix NS'
             self.calc.command("fix NS all ns/gmc 1 0.0")

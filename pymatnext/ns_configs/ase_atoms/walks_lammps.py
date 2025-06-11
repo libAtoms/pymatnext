@@ -119,8 +119,10 @@ def extract_E_F(lmp, recalc):
     if recalc:
         lmp.command("run 0 post no")
 
+    nlocal = lmp.extract_global("nlocal")
+
     return (lmp.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR),
-            lmp.numpy.extract_atom("f"))
+            lmp.numpy.extract_atom("f")[:nlocal])
 
 def walk_pos_gmc(ns_atoms, Emax, rng):
     """walk atomic positions with GMC
