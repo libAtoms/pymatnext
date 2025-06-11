@@ -21,9 +21,9 @@ jobs:
       use-mpi: True
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -95,7 +95,7 @@ jobs:
           mpirun -n 2 pytest --cov=pymatnext --cov-report term --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --with-mpi -k mpi --cov-append
 
       - name: 'Upload Coverage Data'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         if: env.coverage-on-version == matrix.python-version
         with:
           name: coverage-html-${{ matrix.python-version }}
