@@ -1,6 +1,4 @@
 import numpy as np
-from scipy import stats
-import warnings
 
 def calc_log_a(iters, n_walkers, n_cull, each_cull=False):
     if each_cull:
@@ -9,9 +7,10 @@ def calc_log_a(iters, n_walkers, n_cull, each_cull=False):
         # also assume that iters array increments by one for each cull (i.e. not exactly NS iters)
         # X_n = \prod_{i=0}^n \frac{N-i\%P}{N+1-i\%P}
         # \log X_n = \sum_{i=0}^n \log (N-i\%P) - \log(N+1-i\%P)
-        i_range_mod_n_cull = np.array(range(0, iters[-1] + 1)) % n_cull
-        log_X_n_term = np.log(n_walkers - i_range_mod_n_cull) - np.log(n_walkers + 1 - i_range_mod_n_cull)
-        log_X_n = np.cumsum(log_X_n_term)
+        ## using leading underscore to suppress ruff for this unused bit of code
+        _i_range_mod_n_cull = np.array(range(0, iters[-1] + 1)) % n_cull
+        _log_X_n_term = np.log(n_walkers - _i_range_mod_n_cull) - np.log(n_walkers + 1 - _i_range_mod_n_cull)
+        _log_X_n = np.cumsum(_log_X_n_term)
         # a(iter[i]) = X(iter[i-1]) - X(iter[i])
         #     = prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) - prod(0..iter[i]) (N-i%P)/(N+1-i%P)
         #     = [ prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) ] * (1 - prod(iter[i-1]+1..iter[i]) (N-i%P)/(N+1-i%P))
@@ -59,7 +58,7 @@ def calc_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
     return (Z_term, log_shift)
 
 
-def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_extra_DOF, p_entropy_min=5.0):
+def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_extra_DOF, p_entropy_min=5.0, sum_f=np.sum):
     """Do an analysis at a single temperature
 
     Note that some parameters (e.g. percentiles used for low and high extent of the contributing iterations,
@@ -106,12 +105,12 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     #     Z_term = Z_term_true * exp(-log_shift)
     # exp(-log_shift) constant factor doesn't matter for quantities that are calculated from sums
     # weighted with Z_term and normalized by Z_term_sum
-    Z_term_sum = np.sum(Z_term)
+    Z_term_sum = sum_f(Z_term)
 
-    U_pot = np.sum(Z_term * Es) / Z_term_sum
+    U_pot = sum_f(Z_term * Es) / Z_term_sum
 
     if N_atoms is not None:
-        N = np.sum(Z_term * N_atoms) / Z_term_sum
+        N = sum_f(Z_term * N_atoms) / Z_term_sum
         n_extra_DOF * N
 
     U = n_extra_DOF / (2.0 * beta) + U_pot + E_shift
@@ -119,7 +118,7 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     Cvp = n_extra_DOF * kB / 2.0 + kB * beta * beta * (sum(Z_term * Es**2) / Z_term_sum - U_pot**2)
 
     if Vs is not None:
-        V = np.sum(Z_term * Vs) / Z_term_sum
+        V = sum_f(Z_term * Vs) / Z_term_sum
         thermal_exp = -1.0 / V * kB * beta * beta * (sum(Z_term * Vs) * sum(Z_term * Es) / Z_term_sum - sum(Z_term * Vs * Es)) / Z_term_sum
     else:
         V = None
@@ -128,7 +127,7 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     if extra_vals is not None and len(extra_vals) > 0:
         extra_vals_out = []
         for v in (extra_vals):
-            extra_vals_out.append(np.sum(Z_term * v, axis=-1) / Z_term_sum)
+            extra_vals_out.append(sum_f(Z_term * v, axis=-1) / Z_term_sum)
 
     # undo shift of Z_term
     log_Z = np.log(Z_term_sum) + log_shift
@@ -165,7 +164,7 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
 
     probabilities = Z_term / Z_term_sum
     probabilities = probabilities[np.where(probabilities > 0.0)]
-    p_entropy = -np.sum(probabilities * np.log(probabilities))
+    p_entropy = -sum_f(probabilities * np.log(probabilities))
 
     results_dict.update({'low_percentile_config': low_percentile_config,
                          'mode_config': mode_config,

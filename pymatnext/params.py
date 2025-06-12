@@ -21,7 +21,7 @@ def check_fill_defaults(params_section, defaults_section, label="top", verbose=F
     if len(label) != 0:
         label = label + " "
 
-    if type(params_section) != type(defaults_section):
+    if type(params_section) is not type(defaults_section):
         raise ParamError(f"{label}: Params are type {type(params_section)}, should be {type(defaults_section)}")
 
     if verbose:

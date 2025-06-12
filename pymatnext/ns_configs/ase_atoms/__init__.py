@@ -4,7 +4,6 @@ import re
 import importlib
 from copy import deepcopy
 import collections
-import io
 import json
 
 import numpy as np
@@ -23,7 +22,7 @@ from .ase_atoms_params import param_defaults_ase_atoms, param_defaults_walk
 
 try:
     import lammps
-except:
+except ModuleNotFoundError:
     lammps = None
 
 class NSConfig_ASE_Atoms():
@@ -300,7 +299,7 @@ class NSConfig_ASE_Atoms():
             for cmd in lammps_cmds:
                 try:
                     self.calc.command(cmd)
-                except Exception as exc:
+                except Exception:
                     sys.stderr.write(f"LAMMPS exception while running command '{cmd}'\n")
                     raise
 
@@ -484,7 +483,8 @@ class NSConfig_ASE_Atoms():
             self.calc.command("run 0")
             if not skip_initial_store:
                 self.atoms.info["NS_energy"][...] = self.calc.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR)
-                self.atoms.arrays["NS_forces"][...] = self.calc.numpy.extract_atom("f")
+                nlocal = self.calc.extract_global("nlocal")
+                self.atoms.arrays["NS_forces"][...] = self.calc.numpy.extract_atom("f")[:nlocal]
 
             # do an initial 'fix NS' so that every walk can start with 'unfix NS'
             self.calc.command("fix NS all ns/gmc 1 0.0")
@@ -525,20 +525,20 @@ class NSConfig_ASE_Atoms():
         NS_iter int, or None if not found
         """
 
-        l = fileobj.readline()
-        if not l:
+        line = fileobj.readline()
+        if not line:
             raise EOFError
-        n = int(l.strip())
+        n = int(line.strip())
 
-        l = fileobj.readline()
-        if not l:
+        line = fileobj.readline()
+        if not line:
             raise EOFError
-        comment = l.strip()
+        comment = line.strip()
 
         m = re.search(r'\bNS_iter\s*=\s*([0-9]+)\b', comment)
         for i in range(n):
-            l = fileobj.readline()
-            if not l:
+            line = fileobj.readline()
+            if not line:
                 raise EOFError
 
         if m:
