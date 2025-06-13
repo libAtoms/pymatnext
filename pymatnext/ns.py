@@ -73,6 +73,7 @@ class NS:
         self.max_val = None
 
         self.local_configs = []
+        self.extra_config = False
 
         old_state_files = NS._old_state_files(output_filename_prefix)
         if len(old_state_files) > 0:
@@ -369,6 +370,9 @@ class NS:
             new_step_size = {k: v * m for k, v, m in zip(step_size_names, step_size, max_step_size)}
             for ns_config in self.local_configs:
                 ns_config.step_size = new_step_size
+            # make sure that config used as buffer also has correct step_size
+            if self.extra_config:
+                self.extra_config.step_size = new_step_size
 
             # if self.comm.rank == 0:
                 # print("step_size_tune done", list(zip(done, accept_freq, step_size)))
