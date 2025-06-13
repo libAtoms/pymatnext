@@ -48,7 +48,10 @@ def test_Morse_ASE_mpi(mpi_tmp_path, monkeypatch):
 @pytest.mark.mpi
 @pytest.mark.timeout(120, method="thread")
 def test_Morse_ASE_restart_mpi(mpi_tmp_path, monkeypatch):
+    import time
+    t0 = time.time()
     do_Morse_ASE_restart(mpi_tmp_path, monkeypatch, using_mpi=True)
+    print("BOB time", time.time() - t0)
 
 @pytest.mark.mpi
 def test_EAM_LAMMPS_mpi(mpi_tmp_path, monkeypatch):

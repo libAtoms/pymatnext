@@ -209,7 +209,7 @@ class NS:
                     raise RuntimeError(f"Got too many configs (expected {self.n_configs_global}) from new config generator {new_configs_generator}")
 
                 # Check that all step sizes are the same. Maybe instead we should just copy from first?
-                #NB assert new_config.step_size == first_config.step_size, f"Mismatched step size for config {config_i} {new_config.step_size} != 0 {first_config.step_size}" #NB
+                assert new_config.step_size == first_config.step_size, f"Mismatched step size for config {config_i} {new_config.step_size} != 0 {first_config.step_size}" #NB
 
                 target_rank = config_i // self.max_n_configs_local
                 if target_rank == self.comm.rank:
@@ -383,8 +383,8 @@ class NS:
             for ns_config in self.local_configs:
                 ns_config.step_size = new_step_size
             # make sure that config used as buffer also has correct step_size
-            #NB if self.extra_config: #NB
-                #NB self.extra_config.step_size = new_step_size #NB
+            if self.extra_config: #NB
+                self.extra_config.step_size = new_step_size #NB
 
             # if self.comm.rank == 0:
                 # print("step_size_tune done", list(zip(done, accept_freq, step_size)))
