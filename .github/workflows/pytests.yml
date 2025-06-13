@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ 3.8 ]
+        python-version: [ 3.9 ]
       max-parallel: 5
     env:
-      coverage-on-version: 3.8
+      coverage-on-version: 3.9
       use-mpi: True
 
     steps:
@@ -39,7 +39,7 @@ jobs:
         run: conda install pip
 
       - name: Install pytest requirements from pip (specific pymatnext dependencies will be automatically installed when it is)
-        run: pip install wheel setuptools ruff pytest pytest-cov
+        run: pip install wheel setuptools ruff pytest pytest-cov pytest-timeout
 
       - name: Install latest ASE from gitlab
         run: pip install git+https://gitlab.com/ase/ase.git
@@ -72,7 +72,7 @@ jobs:
       - name: Test with pytest - coverage
         if: env.coverage-on-version == matrix.python-version
         run: |
-          pytest -v --cov=pymatnext --cov-report term --cov-report html --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered -rxXs
+          pytest -v --cov=pymatnext --cov-report term --cov-report html --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered -s -rxXs
 
       # # DEBUGGING
       # - name: Setup tmate session
@@ -84,13 +84,13 @@ jobs:
         if: ${{ env.use-mpi && env.coverage-on-version != matrix.python-version}}
         run: |
           # envvar and test run - No coverage
-          mpirun -n 2 pytest --with-mpi -k mpi
+          mpirun -n 2 pytest --with-mpi -k mpi -rxXs
 
       - name: MPI tests -- coverage
         if: ${{ env.use-mpi && env.coverage-on-version == matrix.python-version}}
         run: |
           # envvar and coverage Appended to the previous
-          mpirun -n 2 pytest --cov=pymatnext --cov-report term --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --with-mpi -k mpi --cov-append
+          mpirun -n 2 pytest --cov=pymatnext --cov-report term --cov-config=tests/.coveragerc --cov-report term-missing --cov-report term:skip-covered --cov-append --with-mpi -k mpi -s -rxXs
 
       - name: 'Upload Coverage Data'
         uses: actions/upload-artifact@v4
