@@ -203,8 +203,13 @@ class NS:
         self.local_configs = []
         if self.comm.rank == 0:
             for config_i, new_config in enumerate(new_configs_generator()):
+                if config_i == 0:
+                    first_config = new_config
                 if config_i >= self.n_configs_global:
                     raise RuntimeError(f"Got too many configs (expected {self.n_configs_global}) from new config generator {new_configs_generator}")
+
+                # Check that all step sizes are the same. Maybe instead we should just copy from first?
+                assert new_config.step_size == first_config.step_size, f"Mismatched step size for config {config_i} {new_config.step_size} != 0 {first_config.step_size}"
 
                 target_rank = config_i // self.max_n_configs_local
                 if target_rank == self.comm.rank:
