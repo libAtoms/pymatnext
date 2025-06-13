@@ -1,0 +1,19 @@
+[project]
+
+    name = "pymatnext"
+    requires-python = ">=3.9"
+    dependencies = [ "numpy", "scipy", "matplotlib", "ase", "tqdm", "toml" ]
+    readme = "README.md"
+    license = { file = "LICENSE" }
+    dynamic = ["version"]
+
+[project.scripts]
+    pymatnext = "pymatnext.cli.sample:main"
+    ns_analyse = "pymatnext.cli.ns_analyse:main"
+    ns_analyse_traj = "pymatnext.cli.ns_analyse_traj:main"
+
+[tool.setuptools.packages.find]
+    exclude = [ "test*" ]
+
+[tool.setuptools.dynamic]
+    version = {attr  = "pymatnext.__version__"}
