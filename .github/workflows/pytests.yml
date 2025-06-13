@@ -39,7 +39,7 @@ jobs:
         run: conda install pip
 
       - name: Install pytest requirements from pip (specific pymatnext dependencies will be automatically installed when it is)
-        run: pip install wheel setuptools ruff pytest pytest-cov
+        run: pip install wheel setuptools ruff pytest pytest-cov pytest-timeout
 
       - name: Install latest ASE from gitlab
         run: pip install git+https://gitlab.com/ase/ase.git
