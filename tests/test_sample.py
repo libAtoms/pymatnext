@@ -46,8 +46,13 @@ def test_Morse_ASE_mpi(mpi_tmp_path, monkeypatch):
     do_Morse_ASE(mpi_tmp_path, monkeypatch, using_mpi=True)
 
 @pytest.mark.mpi
+# github CI working test takes ~90 s
+@pytest.mark.timeout(120, method="thread")
 def test_Morse_ASE_restart_mpi(mpi_tmp_path, monkeypatch):
+    import time
+    t0 = time.time()
     do_Morse_ASE_restart(mpi_tmp_path, monkeypatch, using_mpi=True)
+    print("BOB time", time.time() - t0)
 
 @pytest.mark.mpi
 def test_EAM_LAMMPS_mpi(mpi_tmp_path, monkeypatch):
@@ -151,13 +156,13 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
     # files exist
     assert (tmp_path / 'Morse_ASE.test.NS_samples').is_file()
     assert len(list(tmp_path.glob('Morse_ASE.test.traj.*xyz'))) == 1
-    assert len(list(ase.io.read(tmp_path / 'Morse_ASE.test.traj.extxyz', ':'))) == max_iter_use // traj_interval
+    assert len(list(ase.io.read(tmp_path / 'Morse_ASE.test.traj.extxyz', ':'))) == int(np.ceil(max_iter_use / traj_interval))
 
-    # from test run 12/8/2022
+    # from test run 6/13/2025, when max iter was extended to 110 to catch deadlock in old buggy snapshot step_size writing
     if using_mpi:
-        samples_fields_ref = np.asarray([9.90000000e+01, 8.04691943e+00, 1.28925862e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([1.09000000e+02, 8.02719236e+00, 1.28609799e+04, 1.60000000e+01])
     else:
-        samples_fields_ref = np.asarray([9.90000000e+01, 8.08011910e+00, 1.29457779e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([1.09000000e+02, 8.06422068e+00, 1.29203058e+04, 1.60000000e+01])
 
     with open(tmp_path / 'Morse_ASE.test.NS_samples') as fin:
         for l in fin:

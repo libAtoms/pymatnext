@@ -73,6 +73,7 @@ class NS:
         self.max_val = None
 
         self.local_configs = []
+        self.extra_config = False
 
         old_state_files = NS._old_state_files(output_filename_prefix)
         if len(old_state_files) > 0:
@@ -202,8 +203,13 @@ class NS:
         self.local_configs = []
         if self.comm.rank == 0:
             for config_i, new_config in enumerate(new_configs_generator()):
+                if config_i == 0:
+                    first_config = new_config
                 if config_i >= self.n_configs_global:
                     raise RuntimeError(f"Got too many configs (expected {self.n_configs_global}) from new config generator {new_configs_generator}")
+
+                # Check that all step sizes are the same. Maybe instead we should just copy from first?
+                assert new_config.step_size == first_config.step_size, f"Mismatched step size for config {config_i} {new_config.step_size} != 0 {first_config.step_size}"
 
                 target_rank = config_i // self.max_n_configs_local
                 if target_rank == self.comm.rank:
@@ -352,6 +358,13 @@ class NS:
                     print("step_size_tune initial", name, "size", size, "max", max_size, "freq", freq)
                 first_iter = False
 
+            # It looks like the following should always give the same values, hence exit
+            # condition, on all MPI tasks, but this is not guaranteed and can lead to deadlocks
+            # in the allreduce. The reason is that the value of done_i in the loop depends
+            # on the value returned from _tune_from_accept_rate, which depends on the previous
+            # step size, and if those are inconsistent between MPI tasks (as in
+            # https://github.com/libAtoms/pymatnext/issues/20), a deadlock may occur.
+            # Only fix is to make sure this doesn't happen (https://github.com/libAtoms/pymatnext/pull/23)
             done = []
             for param_i in range(n_params):
                 if accept_freq[param_i][0] > 0:
@@ -369,6 +382,9 @@ class NS:
             new_step_size = {k: v * m for k, v, m in zip(step_size_names, step_size, max_step_size)}
             for ns_config in self.local_configs:
                 ns_config.step_size = new_step_size
+            # make sure that config used as buffer also has correct step_size
+            if self.extra_config:
+                self.extra_config.step_size = new_step_size
 
             # if self.comm.rank == 0:
                 # print("step_size_tune done", list(zip(done, accept_freq, step_size)))

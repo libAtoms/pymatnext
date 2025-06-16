@@ -3,7 +3,7 @@
     output_filename_prefix = "Morse_ASE"
     random_seed = 5
 
-    max_iter = 100
+    max_iter = 110
 
     stdout_report_interval_s = 10
 
@@ -11,7 +11,7 @@
 
     [global.step_size_tune]
 
-        interval = 1000
+        interval = 50
 
 [ns]
 
