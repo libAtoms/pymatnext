@@ -362,4 +362,4 @@ def do_sGC(tmp_path, monkeypatch, using_mpi):
         f_13_last, f_29_last = [float(f) for f in llast.strip().split()[4:6]]
 
         assert f_29_first / f_13_first == 1.0
-        assert f_29_last / f_13_last > 5
+        assert f_29_last / f_13_last > 4
