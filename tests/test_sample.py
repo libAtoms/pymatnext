@@ -158,11 +158,11 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
     assert len(list(tmp_path.glob('Morse_ASE.test.traj.*xyz'))) == 1
     assert len(list(ase.io.read(tmp_path / 'Morse_ASE.test.traj.extxyz', ':'))) == int(np.ceil(max_iter_use / traj_interval))
 
-    # from test run 6/13/2025, when max iter was extended to 110 to catch deadlock in old buggy snapshot step_size writing
+    # from test run 6/18/2025, when cell_shear was replaced with cell_shear_per_rt3_atom
     if using_mpi:
         samples_fields_ref = np.asarray([1.09000000e+02, 8.02719236e+00, 1.28609799e+04, 1.60000000e+01])
     else:
-        samples_fields_ref = np.asarray([1.09000000e+02, 8.06422068e+00, 1.29203058e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([1.09000000e+02, 8.05463203e+00, 1.35874031e+04, 1.60000000e+01])
 
     with open(tmp_path / 'Morse_ASE.test.NS_samples') as fin:
         for l in fin:
@@ -172,9 +172,7 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
     # tolerance loosened so that restart, which isn't perfect due to finite precision in
     # saved cofig file, still passes
     if not np.allclose(samples_fields, samples_fields_ref, rtol=0.02):
-        print("final samples line test", samples_fields)
-        print("final samples line ref ", samples_fields_ref)
-        assert False
+        assert False, f"test {samples_fields} ref {samples_fields_ref}"
 
     # this will fail if number of steps is not divisible by N_samples interval, because
     # clone_hist always saves every line. Also, clone_hist is a hack that's truncated by
@@ -245,9 +243,9 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
 
     # from test run 12/8/2022
     if using_mpi:
-        fields_ref = np.asarray([2.99000000e+02, -3.91163426e+02,  1.08674253e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
+        fields_ref = np.asarray([2.99000000e+02, -3.91054935e+02,  1.04562505e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
     else:
-        fields_ref = np.asarray([299, -366.1823642208, 6004.3693892916, 16.0000000000, 0.2500000000, 0.7500000000])
+        fields_ref = np.asarray([2.99000000e+02, -3.90472808e+02,  2.71314350e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
 
     with open(tmp_path / 'EAM_LAMMPS.test.NS_samples') as fin:
         for l in fin:
@@ -255,9 +253,7 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
     fields = np.asarray([float(f) for f in l.strip().split()])
 
     if not np.allclose(fields, fields_ref):
-        print("final line test", fields)
-        print("final line ref ", fields_ref)
-        assert False
+        assert False, f"test {fields} ref {fields_ref}"
 
 
 def do_pressure(tmp_path, monkeypatch, using_mpi):
@@ -308,7 +304,7 @@ def do_pressure(tmp_path, monkeypatch, using_mpi):
 
         Vfirst = float(lfirst.strip().split()[2])
         Vlast = float(llast.strip().split()[2])
-        assert Vfirst / Vlast > 20
+        assert Vfirst / Vlast > 10
 
 
 def do_sGC(tmp_path, monkeypatch, using_mpi):

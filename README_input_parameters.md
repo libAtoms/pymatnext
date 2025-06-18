@@ -50,14 +50,14 @@
     - cell_proportion = 0.0
     - type_proportion = 0.0
     - [max_step_size]
-        - pos_gmc_each_atom = -1.0
-        - cell_volume_per_atom = -1.0
-        - cell_shear = 0.2
+        - pos_gmc_each_atom = -0.1
+        - cell_volume_per_atom = -0.05
+        - cell_shear_per_rt3_atom = -0.2
         - cell_stretch = 0.2
     - [step_size]
         - pos_gmc_each_atom = -1.0
         - cell_volume_per_atom = -1.0
-        - cell_shear = -1.0
+        - cell_shear_per_rt3_atom = -1.0
         - cell_stretch = -1.0
     - [cell]
         - min_aspect_ratio = 0.8
