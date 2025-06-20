@@ -126,12 +126,15 @@ def walk_cell(ns_atoms, Emax, rng):
 
     Returns
     -------
-    [("cell_volume_per_atom", int n_attempt, int n_success), ("cell_shear", ...), ("cell_stretch", ...)] info on move params and attempts/successes
+    [("cell_volume_per_atom", int n_attempt, int n_success),
+     ("cell_shear_per_rt3_atom", int n_attempt, n_success),
+     ("cell_stretch", int n_attempt, n_success)] with n_att and n_acc number of attempted and accepted
+     move for each submove type
     """
     atoms = ns_atoms.atoms
     N_atoms = len(atoms)
-    step_size_volume = N_atoms * ns_atoms.step_size["cell_volume_per_atom"]
-    step_size_shear = ns_atoms.step_size["cell_shear"]
+    step_size_volume = ns_atoms.step_size["cell_volume_per_atom"] * N_atoms
+    step_size_shear = ns_atoms.step_size["cell_shear_per_rt3_atom"] * (N_atoms ** (1.0 / 3.0))
     step_size_stretch = ns_atoms.step_size["cell_stretch"]
     min_aspect_ratio = ns_atoms.move_params["cell"]["min_aspect_ratio"]
     flat_V_prior = ns_atoms.move_params["cell"]["flat_V_prior"]
@@ -197,7 +200,7 @@ def walk_cell(ns_atoms, Emax, rng):
             n_acc[move] += 1
 
     return [("cell_volume_per_atom", n_att["volume"], n_acc["volume"]),
-            ("cell_shear", n_att["shear"], n_acc["shear"]),
+            ("cell_shear_per_rt3_atom", n_att["shear"], n_acc["shear"]),
             ("cell_stretch", n_att["stretch"], n_acc["stretch"])]
 
 

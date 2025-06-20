@@ -62,7 +62,7 @@ class NSConfig_ASE_Atoms():
     filename_suffix = ".extxyz"
     n_quantities = -1
 
-    _step_size_params = ["pos_gmc_each_atom", "cell_volume_per_atom", "cell_shear", "cell_stretch"]
+    _step_size_params = ["pos_gmc_each_atom", "cell_volume_per_atom", "cell_shear_per_rt3_atom", "cell_stretch"]
     _max_E_hist = collections.deque(maxlen=1000)
     _walk_moves = ["gmc", "cell", "type"]
     _Zs = []
@@ -432,9 +432,11 @@ class NSConfig_ASE_Atoms():
         assert set(list(self.max_step_size.keys())) == set(self._step_size_params)
         # max step size for position GMC and cell volume defaults are scaled to volume per atom
         if self.max_step_size["pos_gmc_each_atom"] < 0.0:
-            self.max_step_size["pos_gmc_each_atom"] = (vol_per_atom ** (1.0/3.0)) / 10.0
+            self.max_step_size["pos_gmc_each_atom"] = (vol_per_atom ** (1.0/3.0)) * np.abs(self.max_step_size["pos_gmc_each_atom"])
         if self.max_step_size["cell_volume_per_atom"] < 0.0:
-            self.max_step_size["cell_volume_per_atom"] = vol_per_atom / 20.0
+            self.max_step_size["cell_volume_per_atom"] = vol_per_atom * np.abs(self.max_step_size["cell_volume_per_atom"])
+        if self.max_step_size["cell_shear_per_rt3_atom"] < 0.0:
+            self.max_step_size["cell_shear_per_rt3_atom"] = (vol_per_atom ** (1.0/3.0)) * np.abs(self.max_step_size["cell_shear_per_rt3_atom"])
 
         # actual step sizes
         self.step_size = params["step_size"].copy()

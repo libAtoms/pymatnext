@@ -187,9 +187,9 @@ def walk_cell(ns_atoms, Emax, rng):
 
     Returns
     -------
-    [("cell_volume_per_atom", n_att, n_acc),
-     ("cell_shear", n_att, n_acc),
-     ("cell_stretch", n_att, n_acc)] with n_att and n_acc number of attempted and accepted
+    [("cell_volume_per_atom", int n_attempt, int n_success),
+     ("cell_shear_per_rt3_atom", int n_attempt, n_success),
+     ("cell_stretch", int n_attempt, n_success)] with n_att and n_acc number of attempted and accepted
      move for each submove type
     """
     ns_atoms.calc.command("unfix NS")
@@ -197,8 +197,9 @@ def walk_cell(ns_atoms, Emax, rng):
     # for LAMMPS RanMars RNG
     lammps_seed = rng.integers(1, 900000000)
 
-    step_size_volume = len(atoms) * ns_atoms.step_size["cell_volume_per_atom"]
-    step_size_shear = ns_atoms.step_size["cell_shear"]
+    N_atoms = len(atoms)
+    step_size_volume = ns_atoms.step_size["cell_volume_per_atom"] * N_atoms
+    step_size_shear = ns_atoms.step_size["cell_shear_per_rt3_atom"] * (N_atoms ** (1.0 / 3.0))
     step_size_stretch = ns_atoms.step_size["cell_stretch"]
 
     types, pos, vel = set_lammps_from_atoms(ns_atoms)
@@ -256,7 +257,7 @@ def walk_cell(ns_atoms, Emax, rng):
                 n_acc[submove_type] = 0
 
     return [("cell_volume_per_atom", n_att["volume"], n_acc["volume"]),
-            ("cell_shear", n_att["shear"], n_acc["shear"]),
+            ("cell_shear_per_rt3_atom", n_att["shear"], n_acc["shear"]),
             ("cell_stretch", n_att["stretch"], n_acc["stretch"])]
 
 def walk_type(ns_atoms, Emax, rng):
