@@ -158,11 +158,11 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
     assert len(list(tmp_path.glob('Morse_ASE.test.traj.*xyz'))) == 1
     assert len(list(ase.io.read(tmp_path / 'Morse_ASE.test.traj.extxyz', ':'))) == int(np.ceil(max_iter_use / traj_interval))
 
-    # from test run 6/18/2025, when cell_shear was replaced with cell_shear_per_rt3_atom
+    # from test run 6/20/2025, when cell_shear_per_rt3_atom default was increased
     if using_mpi:
         samples_fields_ref = np.asarray([1.09000000e+02, 8.02719236e+00, 1.28609799e+04, 1.60000000e+01])
     else:
-        samples_fields_ref = np.asarray([1.09000000e+02, 8.05463203e+00, 1.35874031e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([1.09000000e+02, 8.06422068e+00, 1.29203058e+04, 1.60000000e+01])
 
     with open(tmp_path / 'Morse_ASE.test.NS_samples') as fin:
         for l in fin:
@@ -241,11 +241,11 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
     assert len(list(tmp_path.glob('EAM_LAMMPS.test.traj.*xyz'))) == 1
     assert len(list(ase.io.read(tmp_path / 'EAM_LAMMPS.test.traj.extxyz', ':'))) == max_iter_use // traj_interval
 
-    # from test run 12/8/2022
+    # from test run 6/20/2025 when cell shear default was increased
     if using_mpi:
-        fields_ref = np.asarray([2.99000000e+02, -3.91054935e+02,  1.04562505e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
+        fields_ref = np.asarray([2.99000000e+02, -3.90328931e+02,  1.99365520e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
     else:
-        fields_ref = np.asarray([2.99000000e+02, -3.90472808e+02,  2.71314350e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
+        fields_ref = np.asarray([2.99000000e+02, -3.90994404e+02,  1.45640509e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
 
     with open(tmp_path / 'EAM_LAMMPS.test.NS_samples') as fin:
         for l in fin:
