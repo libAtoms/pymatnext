@@ -44,14 +44,27 @@ class NSConfig_ASE_Atoms():
     allocate_only: bool, default False
         do not actually initialize content, just allocate [NOTE: maybe refactor to separate
         allocation and initialization?]
+
+    Class Attributes
+    -----------------
+    filename_suffix: str filename suffix (including leading ".") for ase.io.write that preserves
+        all info in structure
+    n_quantities: int number of (float) quantities that need to be exchanged when communicating
+        config.  Here, NS "energy", cell volume, number of atoms, and composition (if more than
+        1 species)
+    _step_size_params: list(str) step size parameters, fixing order when step-size tuning quantities are
+        returned in a list
+    _max_E_hist: collections.deque history of max_E for effective temperature calculation
+    _walk_moves: list(str) types of walk moves
+    _Zs: list(int) atomic numbers in system
     """
 
     filename_suffix = ".extxyz"
     n_quantities = -1
 
+    _step_size_params = ["pos_gmc_each_atom", "cell_volume_per_atom", "cell_shear", "cell_stretch"]
     _max_E_hist = collections.deque(maxlen=1000)
     _walk_moves = ["gmc", "cell", "type"]
-    _step_size_params = ["pos_gmc_each_atom", "cell_volume_per_atom", "cell_shear", "cell_stretch"]
     _Zs = []
 
 
@@ -240,7 +253,7 @@ class NSConfig_ASE_Atoms():
         """Reset attempted and successful step counters
         """
 
-        self.n_att_acc = np.zeros((len(NSConfig_ASE_Atoms._step_size_params), 2), dtype=np.int64)
+        self.n_att_acc = {k: np.zeros(2, dtype=int) for k in NSConfig_ASE_Atoms._step_size_params}
 
 
     def end_calculator(self):
@@ -416,6 +429,7 @@ class NSConfig_ASE_Atoms():
 
         # max step sizes
         self.max_step_size = params["max_step_size"].copy()
+        assert set(list(self.max_step_size.keys())) == set(self._step_size_params)
         # max step size for position GMC and cell volume defaults are scaled to volume per atom
         if self.max_step_size["pos_gmc_each_atom"] < 0.0:
             self.max_step_size["pos_gmc_each_atom"] = (vol_per_atom ** (1.0/3.0)) / 10.0
@@ -424,11 +438,9 @@ class NSConfig_ASE_Atoms():
 
         # actual step sizes
         self.step_size = params["step_size"].copy()
+        assert set(list(self.step_size.keys())) == set(self._step_size_params)
         # default to half the max for each type
         self.step_size = {k: (v if v >= 0.0 else self.max_step_size[k] / 2.0) for k, v in self.step_size.items()}
-
-        assert set(list(self.max_step_size.keys())) == set(self._step_size_params)
-        assert set(list(self.step_size.keys())) == set(self._step_size_params)
 
         # store function pointers for moves
         self.walk_func = {}
@@ -689,10 +701,8 @@ class NSConfig_ASE_Atoms():
 
         Returns
         -------
-        np.ndarray(n_move_types, 2): array containing number of attempted moves and
-        number of successful moves (2nd index 0 and 1) for each move type, with value
-        of 1st index from position of that step size type in
-        NSConfig_ASE_Atoms._step_size_params
+        dict(str param_name: ndarray([int n_attempts, int n_success])) dict containing number of attempted moves
+        and number of successful moves for each move type
         """
         # if we fixed the number of steps for every move type, and only varied proportions,
         # we could do all the rng in a single call
@@ -701,10 +711,10 @@ class NSConfig_ASE_Atoms():
         while walk_len_so_far < walk_len:
             move = rng.choice(NSConfig_ASE_Atoms._walk_moves, p=self.walk_prob)
 
+            # returns list of tuples with move param attempt/success statistics
             n_att_acc_walk = self.walk_func[move](self, Emax, rng)
-            # can this be done with a single numpy call somehow?
             for param, n_att, n_acc in n_att_acc_walk:
-                self.n_att_acc[NSConfig_ASE_Atoms._step_size_params.index(param)] += (n_att, n_acc)
+                self.n_att_acc[param] += (n_att, n_acc)
 
             walk_len_so_far += self.walk_traj_len[move]
 

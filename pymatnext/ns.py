@@ -324,14 +324,11 @@ class NS:
         adjust_factor: float, default 1.25
             factor to adjust step size by
         """
-        max_step_size = list(self.local_configs[0].max_step_size.values())
-        step_size = [v / m for v, m in zip(self.local_configs[0].step_size.values(), max_step_size)]
-        step_size_names = list(self.local_configs[0].step_size.keys())
+        max_step_size = self.local_configs[0].max_step_size
+        step_size = {k: self.local_configs[0].step_size[k] / max_step_size[k] for k in max_step_size}
 
-        n_params = len(step_size)
-
-        last_too_small = [False] * n_params
-        last_too_big = [False] * n_params
+        last_too_small = {k: False for k in max_step_size}
+        last_too_big = {k: False for k in max_step_size}
 
         # save data from local_configs[0], which will be used for all pilot walks
         local_configs_0_data = self.local_configs[0].backup()
@@ -339,7 +336,7 @@ class NS:
         first_iter = True
 
         while True:
-            accept_freq = np.zeros((n_params, 2))
+            accept_freq = {k: np.zeros(2, dtype=int) for k in max_step_size}
             for ns_config_i in range(n_configs):
                 ns_config = self.local_configs[ns_config_i]
                 if ns_config_i == 0:
@@ -349,13 +346,16 @@ class NS:
 
                 self.local_configs[0].reset_walk_counters()
                 accept_freq_contribution = self.local_configs[0].walk(self.max_val, self.local_walk_length, self.rng_local)
-                accept_freq += np.asarray(accept_freq_contribution)
+                for k in accept_freq:
+                    accept_freq[k] += accept_freq_contribution[k]
 
-            accept_freq = self.comm.allreduce(accept_freq, self.MPI.SUM)
+            # order of dict must be same among MPI tasks, but this should really be a safe thing to assume
+            accept_freq_values = self.comm.allreduce(np.asarray(list(accept_freq.values())), self.MPI.SUM)
+            accept_freq = {k: v for k, v in zip(accept_freq.keys(), accept_freq_values)}
 
             if first_iter and self.comm.rank == 0:
-                for name, size, max_size, freq in zip(step_size_names, self.local_configs[0].step_size.values(), max_step_size, accept_freq):
-                    print("step_size_tune initial", name, "size", size, "max", max_size, "freq", freq)
+                for param_name, max_val in max_step_size.items():
+                    print(f"step_size_tune initial {param_name} size {self.local_configs[0].step_size[param_name]} max {max_val} freq {accept_freq[param_name]}")
                 first_iter = False
 
             # It looks like the following should always give the same values, hence exit
@@ -366,20 +366,19 @@ class NS:
             # https://github.com/libAtoms/pymatnext/issues/20), a deadlock may occur.
             # Only fix is to make sure this doesn't happen (https://github.com/libAtoms/pymatnext/pull/23)
             done = []
-            for param_i in range(n_params):
-                if accept_freq[param_i][0] > 0:
-                    accept_rate_i = accept_freq[param_i, 1] / accept_freq[param_i, 0]
-                    # only adjust if some steps were attempted
-                    step_size[param_i], done_i, last_too_small[param_i], last_too_big[param_i] = self._tune_from_accept_rate(
-                            step_size[param_i], last_too_small[param_i], last_too_big[param_i], accept_rate_i,
-                            min_accept_rate, max_accept_rate, adjust_factor)
+            for param_name in max_step_size:
+                if accept_freq[param_name][0] > 0:
+                    accept_rate = accept_freq[param_name][1] / accept_freq[param_name][0]
+                    step_size[param_name], done_i, last_too_small[param_name], last_too_big[param_name] = self._tune_from_accept_rate(
+                        step_size[param_name], last_too_small[param_name], last_too_big[param_name], accept_rate,
+                        min_accept_rate, max_accept_rate, adjust_factor)
                 else:
                     done_i = True
 
                 done.append(done_i)
 
             # set actual step sizes by rescaling by maximum
-            new_step_size = {k: v * m for k, v, m in zip(step_size_names, step_size, max_step_size)}
+            new_step_size = {k: step_size[k] * max_step_size[k] for k in max_step_size}
             for ns_config in self.local_configs:
                 ns_config.step_size = new_step_size
             # make sure that config used as buffer also has correct step_size
@@ -392,12 +391,12 @@ class NS:
             if all(done):
                 break
 
-            if any(np.asarray(step_size) < 1.0e-12):
-                raise RuntimeError(f"Stepsize got too small with automatic tuning {step_size} {step_size_names}")
+            if any(np.asarray(list(step_size.values())) < 1.0e-12):
+                raise RuntimeError(f"Stepsize got too small with automatic tuning {step_size}")
 
         if self.comm.rank == 0:
-            for name, size in zip(step_size_names, self.local_configs[0].step_size.values()):
-                print("Final step_size_tune", name, size)
+            for param_name, max_val in max_step_size.items():
+                print(f"step_size_tune final {param_name} size {self.local_configs[0].step_size[param_name]}")
 
         # restore to original config
         self.local_configs[0].restore(local_configs_0_data)

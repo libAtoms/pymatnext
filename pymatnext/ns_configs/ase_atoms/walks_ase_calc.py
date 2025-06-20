@@ -18,6 +18,10 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         maximum shifted energy
     rng: numpy.Generator
         random number generator
+
+    Returns
+    -------
+    [("pos_gmc_each_atom", int n_attempt, int n_success)] info on move params and attempts/successes
     """
     atoms = ns_atoms.atoms
     # new random velocities
@@ -119,6 +123,10 @@ def walk_cell(ns_atoms, Emax, rng):
         maximum shifted energy
     rng: numpy.Generator
         random number generator
+
+    Returns
+    -------
+    [("cell_volume_per_atom", int n_attempt, int n_success), ("cell_shear", ...), ("cell_stretch", ...)] info on move params and attempts/successes
     """
     atoms = ns_atoms.atoms
     N_atoms = len(atoms)
@@ -204,6 +212,10 @@ def walk_type(ns_atoms, Emax, rng):
         maximum shifted energy
     rng: numpy.Generator
         random number generator
+
+    Returns
+    -------
+    [] empty list (nominally cell move param attempt/success)
     """
     atoms = ns_atoms.atoms
     N_atoms = len(atoms)
