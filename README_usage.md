@@ -111,10 +111,21 @@ Hopefully section and key names are self explanatory.
 
 ### Additional notes on run parameters
 
-  - all intervals are in NS iterations, except `stdout_report_interval_s` which is in seconds
+  - All intervals are in NS iterations, except `stdout_report_interval_s` which is in seconds
   - `configs.calculator.type` can be `"ASE"` or `"LAMMPS"`
     - if `"LAMMPS"`, `args` consists of `cmds`, with LAMMPS commands, and `types` dict (one key for each species)
     - if `"ASE"`, `args` consists of `module` key with module that defines a `calc` symbol containing an `ase.calculators.Calculator` object
   - `configs.walk.*_traj_len` controls the number of steps in a walk block of that type
   - `configs.walk.*_proportion` controls the fraction of steps overall that are used for that type of move
-  - if `config.walk.type.sGC = true`, a dict of `mu` values, one per species, is required.
+  - If `config.walk.type.sGC = true`, a dict of `mu` values, one per species, is required.
+  - There are position, cell, and atom-type walks, with associated step size parameters that are auto-tuned. Default values depends on
+    an overall volume scale given by `initial_rand_vol_per_atom` and corresponding length scale given by its cube root.
+    - Maxima are in `[configs.walk.max_step_size]` section. Defaults for first three are negative.
+      - `pos_gmc_each_atom`: distance (typically A) that each atom should typically make in GMC step. If negative, used as multiplier for
+        length scale.
+      - `cell_volume_per_atom`: change in volume (typically A^3), will also be scaled by number of atoms. If negative, used as multiplier
+        for volume scale.
+      - `cell_shear_per_rt3_atom`: cell shear magnitude (typically A) which multiplies _normalized_ cell vectors, will also be scaled by 
+        cube root of number of atoms.  If negative used as multiplier for length scale.
+      - `cell_stretch`: cell stretch, fractional (i.e. strain)
+    - Initial values with same key names are in `[configs.walk.step_size]` section. Any negative values are replaced with half the corresponding maximum.
