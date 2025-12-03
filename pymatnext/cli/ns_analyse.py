@@ -78,7 +78,7 @@ def main():
         comm_rank = 0
         comm_size = 1
 
-    linestyles = ['-', '--', '-.', '.']
+    linestyles = ['-', '--', '-.']
 
     if args.plot_together:
         fig = Figure()
@@ -243,6 +243,8 @@ def main():
                     if line.startswith('#'):
                         continue
                     fields = line.strip().split()
+                    if len(fields) == 0:
+                        continue
                     for f_i, f in enumerate(fields):
                         try:
                             fields[f_i] = float(f)
@@ -281,7 +283,11 @@ def main():
                    'thermal_exp' : ('alpha', '{:9.3g}'),
                    'problem' : ('problem', '{:5s}')}
 
-        extensive_N = header.get('extensive', None)
+        if header is not None:
+            extensive_N = header.get('extensive', None)
+        else:
+            extensive_N = None
+
         extensive_fields = ['log_Z', 'FG', 'U', 'Cvp', 'S', 'V', 'thermal_exp']
         if comm_rank == 0:
             print("# ", infile, "n_walkers", n_walkers, "n_cull", n_cull)
@@ -343,23 +349,8 @@ def main():
                                 ax[pfield].spines.right.set_position(("axes", factor))
 
                     valid_Ts_bool = plot_data['valid']
-                    if args.plot_together:
-                        label = header_col(pfield)
 
-                        if args.plot_together_filenames and pfield == list(ax.keys())[0]:
-                            # first field, append filenames
-                            label += ' ' + infile
-                        else:
-                            if infile_i != 0:
-                                label = None
-
-                        ax[pfield].set_ylabel(header_col(pfield))
-
-                        if col_log:
-                            ax[pfield].semilogy(plot_data['T'][valid_Ts], plot_data[pfield][valid_Ts], linestyles[field_i % len(linestyles)], color=f'C{infile_i}', label=label)
-                        else:
-                            ax[pfield].plot(plot_data['T'][valid_Ts], plot_data[pfield][valid_Ts], linestyles[field_i % len(linestyles)], color=f'C{infile_i}', label=label)
-                    else:
+                    def do_plot_sections(pfield, linestyle, color, label):
                         if col_log:
                             pp = ax[pfield].semilogy
                         else:
@@ -378,23 +369,37 @@ def main():
                                     plot_section_start = max(section_start - 1, 0)
                                     plot_section_end = min(T_i + 1, len(plot_data['T']))
                                 if not got_label and valid_Ts_bool[section_start]:
-                                    label = header_col(pfield)
+                                    use_label = label
                                     got_label = True
                                 else:
-                                    label = None
+                                    use_label = None
                                 pp(plot_data['T'][plot_section_start:plot_section_end], plot_data[pfield][plot_section_start:plot_section_end],
-                                   '-' if valid_Ts_bool[section_start] else ':',
-                                   color=f'C{field_i}', label=label)
+                                   linestyle if valid_Ts_bool[section_start] else ':',
+                                   color=color, label=use_label)
                                 section_start = T_i
                         plot_section_start = max(section_start - 1, 0)
                         plot_section_end = len(plot_data['T'])
                         if not got_label:
-                            label = header_col(pfield)
+                            use_label = label
                         pp(plot_data['T'][plot_section_start:plot_section_end], plot_data[pfield][plot_section_start:plot_section_end],
-                           '-' if valid_Ts_bool[section_start] else ':',
-                           color=f'C{field_i}', label=label)
+                           linestyle if valid_Ts_bool[section_start] else ':',
+                           color=color, label=use_label)
 
                         ax[pfield].set_ylabel(header_col(pfield))
+
+                    if args.plot_together:
+                        label = header_col(pfield)
+
+                        if args.plot_together_filenames and pfield == list(ax.keys())[0]:
+                            # first field, append filenames
+                            label += ' ' + infile
+                        else:
+                            if infile_i != 0:
+                                label = None
+
+                        do_plot_sections(pfield, linestyles[field_i % len(linestyles)], f'C{infile_i}', label)
+                    else:
+                        do_plot_sections(pfield, '-', f'C{field_i}', header_col(pfield))
 
                 if not args.plot_together:
                     fig.legend()
