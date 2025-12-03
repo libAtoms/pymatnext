@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-import warnings
+import logging
 
 import sys
 import math
@@ -57,9 +57,12 @@ def main():
     if args.delta_P_GPa is not None:
         args.delta_P = args.delta_P_GPa * GPa
 
-    if args.plot is not None and len(args.plot) == 0:
-        # don't actually do analysis, just return possible column names for plot
-        args.nT = 1
+    if args.plot is not None:
+        if len(args.plot) == 0:
+            # don't actually do analysis, just return possible column names for plot
+            args.nT = 1
+        else:
+            args.plot = " ".join(args.plot).split()
 
     if args.accurate_sum:
         sum_f = math.fsum
@@ -70,7 +73,7 @@ def main():
         comm_rank = MPI.COMM_WORLD.Get_rank()
         comm_size = MPI.COMM_WORLD.Get_size()
         if comm_rank == 0:
-            warnings.warn(f'Using mpi nprocs={comm_size}\n')
+            logging.warning(f'Using mpi nprocs={comm_size}\n')
     else:
         comm_rank = 0
         comm_size = 1
@@ -92,7 +95,7 @@ def main():
     # warn about P = 0
     if comm_rank == 0:
         if args.delta_P is None or args.delta_P == 0.0 or args.delta_P_GPa is None or args.delta_P_GPa == 0.0:
-            warnings.warn("Analysis at P=0 with variable cell is ill defined, and we got --delta_P None or 0.0, "
+            logging.warning("Analysis at P=0 with variable cell is ill defined, and we got --delta_P None or 0.0, "
                           "so be careful if run had cell moves and _sampling_ P was 0.0")
 
     for infile_i, infile in enumerate(args.infile):
@@ -227,7 +230,7 @@ def main():
                 data = MPI.COMM_WORLD.gather(data, root = 0)
                 data = [item for sublist in data for item in sublist]
             except Exception as exc:
-                print("BOB got exception", exc)
+                logging.warning(f"Exception in MPI gather '{exc}'")
                 pass
 
         else:
@@ -339,7 +342,7 @@ def main():
                                 factor = 1.0 + args.plot_twinx_spacing * (len(ax) - 2)
                                 ax[pfield].spines.right.set_position(("axes", factor))
 
-                    valid_Ts = np.where(plot_data['valid'])
+                    valid_Ts_bool = plot_data['valid']
                     if args.plot_together:
                         label = header_col(pfield)
 
@@ -358,9 +361,39 @@ def main():
                             ax[pfield].plot(plot_data['T'][valid_Ts], plot_data[pfield][valid_Ts], linestyles[field_i % len(linestyles)], color=f'C{infile_i}', label=label)
                     else:
                         if col_log:
-                            ax[pfield].semilogy(plot_data['T'][valid_Ts], plot_data[pfield][valid_Ts], '-', color=f'C{field_i}', label=header_col(pfield))
+                            pp = ax[pfield].semilogy
                         else:
-                            ax[pfield].plot(plot_data['T'][valid_Ts], plot_data[pfield][valid_Ts], '-', color=f'C{field_i}', label=header_col(pfield))
+                            pp = ax[pfield].plot
+
+                        section_start = 0
+                        got_label = False
+                        for T_i in range(1, len(plot_data['T'])):
+                            if valid_Ts_bool[T_i] != valid_Ts_bool[section_start]:
+                                # section ended on previous
+                                if valid_Ts_bool[section_start]:
+                                    # valid section
+                                    plot_section_start = section_start
+                                    plot_section_end = min(T_i - 1 + 1, len(plot_data['T']))
+                                else:
+                                    plot_section_start = max(section_start - 1, 0)
+                                    plot_section_end = min(T_i + 1, len(plot_data['T']))
+                                if not got_label and valid_Ts_bool[section_start]:
+                                    label = header_col(pfield)
+                                    got_label = True
+                                else:
+                                    label = None
+                                pp(plot_data['T'][plot_section_start:plot_section_end], plot_data[pfield][plot_section_start:plot_section_end],
+                                   '-' if valid_Ts_bool[section_start] else ':',
+                                   color=f'C{field_i}', label=label)
+                                section_start = T_i
+                        plot_section_start = max(section_start - 1, 0)
+                        plot_section_end = len(plot_data['T'])
+                        if not got_label:
+                            label = header_col(pfield)
+                        pp(plot_data['T'][plot_section_start:plot_section_end], plot_data[pfield][plot_section_start:plot_section_end],
+                           '-' if valid_Ts_bool[section_start] else ':',
+                           color=f'C{field_i}', label=label)
+
                         ax[pfield].set_ylabel(header_col(pfield))
 
                 if not args.plot_together:
