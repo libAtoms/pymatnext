@@ -137,13 +137,14 @@ def main():
                     f = line.split()
                     ## should we ignore certain kinds of malformed lines?
                     ## try:
-                    it = int(f[0])
-                    vals_line = [float(v) for v in f[1:]]
+                    NS_iter = int(f[0])
+                    # NS_global_ind = int(f[1])
+                    vals_line = [float(v) for v in f[2:]]
 
                     if l_i == 0 and len(vals_line) != 1 + len(header["extras"]):
-                        raise ValueError(f"Expecting 1 + {len(header['extras'])} extra fields, but got {len(vals_line)} on first line, refusing to continue")
+                        raise ValueError(f"Expecting 1 (NS quantity) + {len(header['extras'])} extra fields, but got {len(vals_line)} on first line, refusing to continue")
 
-                    iters.append(it)
+                    iters.append(NS_iter)
                     Es.append(vals_line[0])
                     vals.append(vals_line[1:])
                     ## except:
