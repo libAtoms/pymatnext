@@ -97,7 +97,7 @@ def do_Morse_ASE_restart(tmp_path, monkeypatch, using_mpi):
         (tmp_path / (NS_samples_file + '.new')).rename(tmp_path / NS_samples_file)
 
     # run again, should restart from existing files
-    do_Morse_ASE(tmp_path, monkeypatch, using_mpi=using_mpi)
+    do_Morse_ASE(tmp_path, monkeypatch, using_mpi=using_mpi, restart=True)
 
     # check that NS_samples file wasn't overwritten by looking for "restart" key in header
     with open(tmp_path / NS_samples_file) as fin:
@@ -106,7 +106,7 @@ def do_Morse_ASE_restart(tmp_path, monkeypatch, using_mpi):
     assert header["restart"]
 
 
-def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
+def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, restart=False, max_iter=None):
     if using_mpi:
         from mpi4py import MPI
         if MPI.COMM_WORLD.size != 2:
@@ -160,9 +160,17 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, max_iter=None):
 
     # from test run 6/20/2025, when cell_shear_per_rt3_atom default was increased
     if using_mpi:
-        samples_fields_ref = np.asarray([1.09000000e+02, 8.02719236e+00, 1.28609799e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([1.09000000e+02, -1, 8.02719236e+00, 1.28609799e+04, 1.60000000e+01])
+        if restart:
+            samples_fields_ref[1] = 85
+        else:
+            samples_fields_ref[1] = 85
     else:
-        samples_fields_ref = np.asarray([1.09000000e+02, 8.06422068e+00, 1.29203058e+04, 1.60000000e+01])
+        samples_fields_ref = np.asarray([1.09000000e+02, -1, 8.06422068e+00, 1.29203058e+04, 1.60000000e+01])
+        if restart:
+            samples_fields_ref[1] = 136
+        else:
+            samples_fields_ref[1] = 135
 
     with open(tmp_path / 'Morse_ASE.test.NS_samples') as fin:
         for l in fin:
@@ -243,9 +251,9 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
 
     # from test run 6/20/2025 when cell shear default was increased
     if using_mpi:
-        fields_ref = np.asarray([2.99000000e+02, -3.90328931e+02,  1.99365520e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
+        fields_ref = np.asarray([2.99000000e+02, 55, -3.90328931e+02,  1.99365520e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
     else:
-        fields_ref = np.asarray([2.99000000e+02, -3.90994404e+02,  1.45640509e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
+        fields_ref = np.asarray([2.99000000e+02, 50, -3.90994404e+02,  1.45640509e+04,  1.60000000e+01, 1.87500000e-01,  8.12500000e-01])
 
     with open(tmp_path / 'EAM_LAMMPS.test.NS_samples') as fin:
         for l in fin:
@@ -358,8 +366,8 @@ def do_sGC(tmp_path, monkeypatch, using_mpi):
                     lfirst = l
             llast = l
 
-        f_13_first, f_29_first = [float(f) for f in lfirst.strip().split()[4:6]]
-        f_13_last, f_29_last = [float(f) for f in llast.strip().split()[4:6]]
+        f_13_first, f_29_first = [float(f) for f in lfirst.strip().split()[5:7]]
+        f_13_last, f_29_last = [float(f) for f in llast.strip().split()[5:7]]
 
         assert f_29_first / f_13_first == 1.0
         assert f_29_last / f_13_last > 4
