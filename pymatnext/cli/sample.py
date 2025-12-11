@@ -247,10 +247,11 @@ def sample(args, MPI, NS_comm, walker_comm):
             break
 
         # max info should already be set to: ns.rank_of_max, ns.local_ind_of_max, ns.max_val, ns.max_quants
+        global_ind_of_max = ns.global_ind(ns.rank_of_max, ns.local_ind_of_max)
 
         # write quantities for max config which will be culled below
         if NS_comm.rank == 0 and sample_interval > 0 and loop_iter % sample_interval == 0:
-            ns_file.write(f"{loop_iter} {ns.max_val:.10f} " + " ".join([f"{quant:.10f}" for quant in ns.max_quants]) + "\n")
+            ns_file.write(f"{loop_iter} {global_ind_of_max} {ns.max_val:.10f} " + " ".join([f"{quant:.10f}" for quant in ns.max_quants]) + "\n")
             ns_file.flush()
 
         # tune step sizes at some iteration interval
@@ -261,7 +262,6 @@ def sample(args, MPI, NS_comm, walker_comm):
                               adjust_factor=params_step_size_tune["adjust_factor"])
 
         # pick random config as source for clone.
-        global_ind_of_max = ns.global_ind(ns.rank_of_max, ns.local_ind_of_max)
         global_ind_of_clone_source = (global_ind_of_max + 1 + ns.rng_global.integers(0, ns.n_configs_global - 1)) % ns.n_configs_global
         rank_of_clone_source, local_ind_of_clone_source = ns.local_ind(global_ind_of_clone_source)
 
@@ -282,7 +282,7 @@ def sample(args, MPI, NS_comm, walker_comm):
                     ns.extra_config.recv(ns.rank_of_max, ns.comm, MPI)
                     max_config_write = ns.extra_config
 
-                max_config_write.write(traj_file, extra_info={"NS_iter": loop_iter})
+                max_config_write.write(traj_file, extra_info={"NS_iter": loop_iter, "global_ind": global_ind_of_max })
                 traj_file.flush()
 
             elif NS_comm.rank == ns.rank_of_max:

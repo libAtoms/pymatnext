@@ -110,10 +110,10 @@ class AtomsContiguousStorage(Atoms):
         for data_dict in [self.arrays, self.info]:
             for item_name in data_dict:
                 item = data_dict[item_name]
-                # create correct shape view into preallocated space
                 if not isinstance(item, np.ndarray):
                     continue
 
+                # determine correct size for preallocated space
                 if item.dtype == np.int64:
                     n_ints += item.size
                 elif item.dtype == np.float64:
@@ -129,10 +129,10 @@ class AtomsContiguousStorage(Atoms):
         for data_dict in [self.arrays, self.info]:
             for item_name in data_dict:
                 item = data_dict[item_name]
-                # create correct shape view into preallocated space
                 if not isinstance(item, np.ndarray):
                     continue
 
+                # create correct shape view into preallocated space
                 prealloc_view = None
                 if item.dtype == np.int64:
                     prealloc_view = self.contig_storage_int[int_offset:int_offset + item.size].reshape(item.shape)
