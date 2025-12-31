@@ -1,3 +1,5 @@
+import warnings
+
 class NullComm():
     """Fake alternative to mpi4py.MPI.Comm for serial run, which implements needed subset
     of mpi4py.MPI.Comm methods
@@ -36,3 +38,24 @@ class MPI:
 
     def Finalize():
         return
+
+
+def truncate_file_first_col_iter(filename, n_header, sample_interval, max_iter):
+    warnings.warn(f"Truncating {filename}")
+    # truncate file after first col exceeds iteration
+    with open(filename, "r+") as fd:
+        # skip header
+        for _ in range(n_header):
+            _ = fd.readline()
+        line_i = None
+        while True:
+            line = fd.readline()
+            if not line:
+                raise RuntimeError(f"Failed to find enough lines in {filename} (last line {line_i}) to reach snapshot iter {max_iter}")
+
+            line_i = int(line.split()[0])
+            if line_i + sample_interval > max_iter:
+                warnings.warn(f"Truncated {filename} at iter {line_i}")
+                cur_pos = fd.tell()
+                fd.truncate(cur_pos)
+                break

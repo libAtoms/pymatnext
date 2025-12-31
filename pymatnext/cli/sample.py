@@ -18,6 +18,7 @@ import toml
 from pymatnext.ns import NS
 from pymatnext.params import check_fill_defaults
 from pymatnext.sample_params import param_defaults
+from pymatnext.sample_utils import truncate_file_first_col_iter
 
 from pymatnext.loop_exit import NSLoopExit
 
@@ -175,36 +176,15 @@ def sample(args, MPI, NS_comm, walker_comm):
     traj_file_name = f"{output_filename_prefix}.traj{config_suffix}"
 
     if NS_comm.rank == 0:
+        # set up I/O
         if ns.snapshot_iter >= 0:
             # snapshot, truncate existing .NS_samples, .clone_history, and .traj.<suffix> files
 
-            # NOTE: does this code belong here?  Maybe refactor to a function, maybe
-            # move trajectory truncation into NSConfig or something?
+            truncate_file_first_col_iter(ns_file_name, n_header=1, sample_interval=sample_interval, max_iter=ns.snapshot_iter)
+            truncate_file_first_col_iter(clone_history_file_name, n_header=1, sample_interval=1, max_iter=ns.snapshot_iter)
 
-            def _truncate_file(filename, n_header, sample_interval):
-                warnings.warn(f"Truncating {filename}")
-                # truncate .NS_samples file
-                with open(ns_file_name, "r+") as fd:
-                    # skip header
-                    for _ in range(n_header):
-                        _ = fd.readline()
-                    line_i = None
-                    while True:
-                        line = fd.readline()
-                        if not line:
-                            raise RuntimeError(f"Failed to find enough lines in {filename} (last line {line_i}) to reach snapshot iter {ns.snapshot_iter}")
-
-                        line_i = int(line.split()[0])
-                        if line_i + sample_interval > ns.snapshot_iter:
-                            warnings.warn(f"Truncated {filename} at iter {line_i}")
-                            cur_pos = fd.tell()
-                            fd.truncate(cur_pos)
-                            break
-
-            _truncate_file(ns_file_name, n_header=1, sample_interval=sample_interval)
-            _truncate_file(clone_history_file_name, n_header=1, sample_interval=1)
-
-            # truncate .traj.suffix file
+            # NOTE: should move trajectory truncation into NSConfig, since it's config file-format specific
+            # truncate .traj.<suffix> file
             f_configs = open(traj_file_name, "r+")
             while True:
                 try:
@@ -238,6 +218,10 @@ def sample(args, MPI, NS_comm, walker_comm):
                 clone_history_file = None
 
             traj_file = open(traj_file_name,  "w")
+    else:
+        ns_file = None
+        traj_file = None
+        clone_history_file = None
 
     max_iter = params_global["max_iter"]
     if max_iter > 0:
@@ -258,7 +242,7 @@ def sample(args, MPI, NS_comm, walker_comm):
         global_ind_of_max = ns.global_ind(ns.rank_of_max, ns.local_ind_of_max)
 
         # write quantities for max config which will be culled below
-        if NS_comm.rank == 0 and sample_interval > 0 and loop_iter % sample_interval == 0:
+        if ns_file and sample_interval > 0 and loop_iter % sample_interval == 0:
             ns_file.write(f"{loop_iter} {global_ind_of_max} {ns.max_val:.10f} " + " ".join([f"{quant:.10f}" for quant in ns.max_quants]) + "\n")
             ns_file.flush()
 
@@ -280,7 +264,7 @@ def sample(args, MPI, NS_comm, walker_comm):
 
         # write max to traj file
         if traj_interval > 0 and loop_iter % traj_interval == 0:
-            if NS_comm.rank == 0:
+            if traj_file:
                 # only head node writes
                 if NS_comm.rank == ns.rank_of_max:
                     # already local
@@ -338,8 +322,12 @@ def sample(args, MPI, NS_comm, walker_comm):
 
         loop_iter += 1
 
+    if ns_file:
+        ns_file.close()
     if clone_history_file:
         clone_history_file.close()
+    if traj_file:
+        traj_file.close()
 
 
 def main(args_list=None, mpi_finalize=True):
