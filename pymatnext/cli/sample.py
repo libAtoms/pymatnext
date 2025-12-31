@@ -166,42 +166,43 @@ def sample(args, MPI, NS_comm, walker_comm):
     traj_interval = params_global["traj_interval"]
     sample_interval = params_global["sample_interval"]
     snapshot_interval = params_global["snapshot_interval"]
+    snapshot_save_old = params_global["snapshot_save_old"]
     stdout_report_interval_s = params_global["stdout_report_interval_s"]
     step_size_tune_interval = params_step_size_tune["interval"]
-    # WARNING: clone_history_file not restartable
-    if params_global["clone_history"]:
-        clone_history_file = open(f"{output_filename_prefix}.clone_history", "w")
-        clone_history_file.write(f'# {{"fields": ["loop_iter", "clone_source", "clone_target"], "n_walkers": {ns.n_configs_global}}}\n')
-    else:
-        clone_history_file = None
 
     ns_file_name = f"{output_filename_prefix}.NS_samples"
+    clone_history_file_name = f"{output_filename_prefix}.clone_history" if params_global["clone_history"] else None
     traj_file_name = f"{output_filename_prefix}.traj{config_suffix}"
 
     if NS_comm.rank == 0:
         if ns.snapshot_iter >= 0:
-            # snapshot, truncate existing NS_samples and .traj.suffix files
+            # snapshot, truncate existing .NS_samples, .clone_history, and .traj.<suffix> files
 
             # NOTE: does this code belong here?  Maybe refactor to a function, maybe
             # move trajectory truncation into NSConfig or something?
 
-            # truncate .NS_samples file
-            f_samples = open(ns_file_name, "r+")
-            # skip header
-            _ = f_samples.readline()
-            line_i = None
-            while True:
-                line = f_samples.readline()
-                if not line:
-                    raise RuntimeError(f"Failed to find enough lines in .NS_samples file (last line {line_i}) to reach snapshot iter {ns.snapshot_iter}")
+            def _truncate_file(filename, n_header, sample_interval):
+                warnings.warn(f"Truncating {filename}")
+                # truncate .NS_samples file
+                with open(ns_file_name, "r+") as fd:
+                    # skip header
+                    for _ in range(n_header):
+                        _ = fd.readline()
+                    line_i = None
+                    while True:
+                        line = fd.readline()
+                        if not line:
+                            raise RuntimeError(f"Failed to find enough lines in {filename} (last line {line_i}) to reach snapshot iter {ns.snapshot_iter}")
 
-                line_i = int(line.split()[0])
-                if line_i + sample_interval > ns.snapshot_iter:
-                    cur_pos = f_samples.tell()
-                    f_samples.truncate(cur_pos)
-                    break
+                        line_i = int(line.split()[0])
+                        if line_i + sample_interval > ns.snapshot_iter:
+                            warnings.warn(f"Truncated {filename} at iter {line_i}")
+                            cur_pos = fd.tell()
+                            fd.truncate(cur_pos)
+                            break
 
-            f_samples.close()
+            _truncate_file(ns_file_name, n_header=1, sample_interval=sample_interval)
+            _truncate_file(clone_history_file_name, n_header=1, sample_interval=1)
 
             # truncate .traj.suffix file
             f_configs = open(traj_file_name, "r+")
@@ -220,14 +221,21 @@ def sample(args, MPI, NS_comm, walker_comm):
 
             ns_file = open(ns_file_name, "a")
             traj_file = open(traj_file_name, "a")
+            clone_history_file = open(clone_history_file_name, "a")
 
         else:
-            # run from start, open new .NS_samples and .traj.suffix files
-
+            # run from start, open new .NS_samples, .clone_history, and .traj.<suffix> files
+            # write header as needed
             ns_file = open(ns_file_name, "w")
             header_dict = { "n_walkers": ns.n_configs_global, "n_cull": 1 }
             header_dict.update(ns.local_configs[0].header_dict())
             ns_file.write("# " + " ".join(json.dumps(header_dict, indent=0).splitlines()) + "\n")
+
+            if clone_history_file_name:
+                clone_history_file = open(clone_history_fine_name, "w")
+                clone_history_file.write(f'# {{"fields": ["loop_iter", "clone_source", "clone_target"], "n_walkers": {ns.n_configs_global}}}\n')
+            else:
+                clone_history_file = None
 
             traj_file = open(traj_file_name,  "w")
 
@@ -265,7 +273,7 @@ def sample(args, MPI, NS_comm, walker_comm):
         global_ind_of_clone_source = (global_ind_of_max + 1 + ns.rng_global.integers(0, ns.n_configs_global - 1)) % ns.n_configs_global
         rank_of_clone_source, local_ind_of_clone_source = ns.local_ind(global_ind_of_clone_source)
 
-        if clone_history_file is not None:
+        if clone_history_file:
             clone_history_file.write(f"{loop_iter} {global_ind_of_clone_source} {global_ind_of_max}\n")
             if loop_iter % 1000 == 1000 - 1:
                 clone_history_file.flush()
@@ -326,11 +334,11 @@ def sample(args, MPI, NS_comm, walker_comm):
         # NOTE: should this be a time rather than iteration interval?  That'd basically be straightforward,
         # except it would require an additional communication so all processes agree that it's time for a snapshot
         if loop_iter > 0 and snapshot_interval > 0 and loop_iter % snapshot_interval == 0:
-            ns.snapshot(loop_iter, output_filename_prefix)
+            ns.snapshot(loop_iter, output_filename_prefix, save_old=snapshot_save_old)
 
         loop_iter += 1
 
-    if clone_history_file is not None:
+    if clone_history_file:
         clone_history_file.close()
 
 

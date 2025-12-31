@@ -11,6 +11,7 @@ param_defaults = {
         "sample_interval": 1,
         "traj_interval": 100,
         "snapshot_interval": 10000,
+        "snapshot_save_old": 2,
         "step_size_tune": {
             "interval": 1000,
             "n_configs": 1,
