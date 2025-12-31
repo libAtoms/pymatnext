@@ -232,7 +232,7 @@ def sample(args, MPI, NS_comm, walker_comm):
             ns_file.write("# " + " ".join(json.dumps(header_dict, indent=0).splitlines()) + "\n")
 
             if clone_history_file_name:
-                clone_history_file = open(clone_history_fine_name, "w")
+                clone_history_file = open(clone_history_file_name, "w")
                 clone_history_file.write(f'# {{"fields": ["loop_iter", "clone_source", "clone_target"], "n_walkers": {ns.n_configs_global}}}\n')
             else:
                 clone_history_file = None
