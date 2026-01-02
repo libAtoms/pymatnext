@@ -480,11 +480,11 @@ class NS:
         output_filename_prefix: str
             initial part of filenames that will be written to
         save_old: int, default 2
-            number of old snapshots to save
+            number of old snapshots to save, negative to save all
         """
         if self.comm.rank == 0:
             old_state_files = NS._old_state_files(output_filename_prefix)
-            if len(old_state_files) > save_old - 1:
+            if save_old >= 0 and len(old_state_files) > save_old - 1:
                 old_state_files = old_state_files[:-(save_old-1)]
             else:
                 old_state_files = []
