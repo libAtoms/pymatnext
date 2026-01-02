@@ -181,7 +181,8 @@ def sample(args, MPI, NS_comm, walker_comm):
             # snapshot, truncate existing .NS_samples, .clone_history, and .traj.<suffix> files
 
             truncate_file_first_col_iter(ns_file_name, n_header=1, sample_interval=sample_interval, max_iter=ns.snapshot_iter)
-            truncate_file_first_col_iter(clone_history_file_name, n_header=1, sample_interval=1, max_iter=ns.snapshot_iter)
+            if clone_history_file_name:
+                truncate_file_first_col_iter(clone_history_file_name, n_header=1, sample_interval=1, max_iter=ns.snapshot_iter)
 
             # NOTE: should move trajectory truncation into NSConfig, since it's config file-format specific
             # truncate .traj.<suffix> file
@@ -201,7 +202,10 @@ def sample(args, MPI, NS_comm, walker_comm):
 
             ns_file = open(ns_file_name, "a")
             traj_file = open(traj_file_name, "a")
-            clone_history_file = open(clone_history_file_name, "a")
+            if clone_history_file_name:
+                clone_history_file = open(clone_history_file_name, "a")
+            else:
+                clone_history_file = None
 
         else:
             # run from start, open new .NS_samples, .clone_history, and .traj.<suffix> files
