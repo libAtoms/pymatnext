@@ -200,11 +200,12 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     problem = False
     # one way to get bad sampling is to be too dominated by a few configurations
     problem |= p_entropy < p_entropy_min
-    # another is to clip the top (high iteration #) of the distribution
-    low_percentile_mean = np.mean(Z_term[low_percentile_config:low_percentile_config + 1000] / Z_term_sum)
-    high_percentile_mean = np.mean(Z_term[high_percentile_config - 1000:high_percentile_config] / Z_term_sum)
+    # another is to clip the top (high iteration #) of the distribution, and therefore be very asymmetric
+    n_avg = (high_percentile_config - low_percentile_config) // 10
+    low_percentile_mean = np.mean(Z_term[low_percentile_config:low_percentile_config + n_avg] / Z_term_sum)
+    high_percentile_mean = np.mean(Z_term[high_percentile_config - n_avg:high_percentile_config] / Z_term_sum)
     problem |= high_percentile_mean / low_percentile_mean > 2.0
 
-    results_dict['problem'] = 'true' if problem else 'false'
+    results_dict['problem'] = f'{problem}'.lower()
 
     return results_dict
