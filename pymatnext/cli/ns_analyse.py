@@ -156,6 +156,16 @@ def main():
             Es = np.asarray(Es)
             vals = np.asarray(vals)
 
+            def _get_and_remove_from_extras(key):
+                key_ind = header['extras'].index(key)
+                vals_of_key = vals[:, key_ind].copy()
+                inds = list(range(vals.shape[1]))
+                del inds[key_ind]
+                vals = vals[:, inds]
+                header['extras'].remove(key)
+
+                return vals_of_key
+
             # pointer to natoms
             try:
                 natoms_ind = header['extras'].index('natoms')
@@ -164,12 +174,7 @@ def main():
                 natoms = None
             # pull out Vs
             try:
-                vol_ind = header['extras'].index('volume')
-                Vs = vals[:, vol_ind]
-                inds = list(range(vals.shape[1]))
-                del inds[vol_ind]
-                vals = vals[:, inds]
-                header['extras'].remove('volume')
+                Vs = _get_and_remove_from_extras('volume')
             except (KeyError, ValueError):
                 Vs = None
 
@@ -186,8 +191,12 @@ def main():
 
             # main
             n_walkers = header['n_walkers']
-            n_cull = header.get('n_cull', 1)
-            log_a = utils.calc_log_a(iters, n_walkers, n_cull)
+            discrete = header.get('discrete', False)
+            if discrete:
+                n_cull = _get_and_remove_from_extras('n_cull')
+            else:
+                n_cull = header.get('n_cull', 1)
+            log_a = utils.calc_log_a(iters, n_walkers, n_cull, discrete=discrete)
 
             flat_V_prior = False
             if Vs is not None:

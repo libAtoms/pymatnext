@@ -1,7 +1,29 @@
 import numpy as np
 
-def calc_log_a(iters, n_walkers, n_cull, each_cull=False):
-    if each_cull:
+def calc_log_a(iters, n_walkers, n_cull, discrete=False):
+    if discrete:
+        iters = np.asarray(iters)
+        n_cull = np.asarray(n_cull)
+        # need every iter, and the number culled for each iter
+        assert len(iters) == len(n_cull)
+        assert np.all(iters[1:] - iters[:-1] == 1)
+        # fraction remaining after each iteration
+        fracs = (n_walkers - n_cull) / n_walkers
+        print("fracs", fracs)
+        # volume remaining after iteration i
+        # vol_i = \prod_{j=0..i} frac_i
+        # weight of configs culled in iteration i
+        # a_i = vol_{i-1} - vol_{i}
+        #     = \prod_{j=0..i-1} frac_j - \prod_{j=0..i} frac_j
+        #     = (\prod_{j=0..i-1} frac_j) (1 - frac_i)
+        # log(a_i) = (\sum_{j=0..i-1} log(frac_j)) + log(1 - frac_i)
+        frac_log_sums = np.append([0], np.cumsum(np.log(fracs)))
+        log_a = frac_log_sums[:-1] + np.log(1.0 - fracs)
+
+    else:
+
+        """
+        # UNSUPPORTED MULTIPLE CULLS
         # assume that for multiple culls, every energy is reported, use formula from
         #     SENS paper PRX v. 4 p 031034 (2014) Eq. 3
         # also assume that iters array increments by one for each cull (i.e. not exactly NS iters)
@@ -15,8 +37,9 @@ def calc_log_a(iters, n_walkers, n_cull, each_cull=False):
         #     = prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) - prod(0..iter[i]) (N-i%P)/(N+1-i%P)
         #     = [ prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) ] * (1 - prod(iter[i-1]+1..iter[i]) (N-i%P)/(N+1-i%P))
         #     = [ prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) ] * (1 - prod(iter[i-1]+1..iter[i]) (N-i%P)/(N+1-i%P))
-        raise RuntimeError('calc_log_a for each_cull not yet implemented')
-    else:
+        """
+        if n_cull != 1:
+            raise RuntimeError(f'calc_log_a for n_cull = {n_cull} != 1 not yet implemented')
         log_a = iters * np.log((n_walkers - n_cull + 1) / (n_walkers + 1))
 
     return log_a
