@@ -22,12 +22,13 @@ sampling) without having to modify the parameter file.
 
  - sampled quantities in `<global.output_file_prefix><output_file_postfix>.NS_samples`
    - JSON format header line, prefixed by `#`,  describing NS run parameters and quantities in file, for analysis
-   - one line every `<global.sample_interval>` NS iterations, with iteration number, NS quantity, and 
-     configuration-specific quantities specified in header `extra` dict item.
+   - one line every `<global.sample_interval>` NS iterations, with iteration number, global index of
+     configuration selected, NS quantity, and configuration-specific quantities specified in header `extra`
+     dict item.
 
  - sampled configurations in `<global.output_file_prefix><output_file_postfix>.traj.<filename_suffix>` 
    - One configuration in a type-specific format (`extxyz` for atomic configurations) every
-    `global.traj_interval` NS iterations
+    `<global.traj_interval>` NS iterations
 
  - snapshots
    - NS state in `<global.output_file_prefix><output_file_postfix>.iter_<iter>.state.json>`
