@@ -92,12 +92,6 @@ def main():
             return colname_str
 
 
-    # warn about P = 0
-    if comm_rank == 0:
-        if args.delta_P is None or args.delta_P == 0.0 or args.delta_P_GPa is None or args.delta_P_GPa == 0.0:
-            logging.warning("Analysis at P=0 with variable cell is ill defined, and we got --delta_P None or 0.0, "
-                          "so be careful if run had cell moves and _sampling_ P was 0.0")
-
     for infile_i, infile in enumerate(args.infile):
         iters = []
         Es = []
@@ -156,7 +150,7 @@ def main():
             Es = np.asarray(Es)
             vals = np.asarray(vals)
 
-            def _get_and_remove_from_extras(key):
+            def _get_and_remove_from_extras(key, vals):
                 key_ind = header['extras'].index(key)
                 vals_of_key = vals[:, key_ind].copy()
                 inds = list(range(vals.shape[1]))
@@ -164,7 +158,7 @@ def main():
                 vals = vals[:, inds]
                 header['extras'].remove(key)
 
-                return vals_of_key
+                return vals_of_key, vals
 
             # pointer to natoms
             try:
@@ -174,29 +168,37 @@ def main():
                 natoms = None
             # pull out Vs
             try:
-                Vs = _get_and_remove_from_extras('volume')
+                Vs, vals = _get_and_remove_from_extras('volume', vals)
             except (KeyError, ValueError):
                 Vs = None
 
-            # make into list of ndarrays, each of shape (Nsamples,)
-            vals = list(vals.T)
+            # warn about P = 0
+            if comm_rank == 0:
+                if Vs is not None and (args.delta_P is None or args.delta_P == 0.0 or args.delta_P_GPa is None or args.delta_P_GPa == 0.0):
+                    logging.warning("Analysis at P=0 with variable cell is ill defined, and we got --delta_P None or 0.0, "
+                                    "so be careful if run had cell moves and _sampling_ P was 0.0")
 
+            # enthalpy if needed
             if args.delta_P is not None and args.delta_P != 0.0:
                 if Vs is None:
                     raise RuntimeError('--delta_P != 0 requires volumes')
                 Es += args.delta_P*Vs
 
+            # shift energy 0
             E_min = Es[-1]
             Es -= E_min
 
-            # main
+            # header
             n_walkers = header['n_walkers']
             discrete = header.get('discrete', False)
             if discrete:
-                n_cull = _get_and_remove_from_extras('n_cull')
+                n_cull, vals = _get_and_remove_from_extras('n_cull', vals)
             else:
                 n_cull = header.get('n_cull', 1)
             log_a = utils.calc_log_a(iters, n_walkers, n_cull, discrete=discrete)
+
+            # make into list of ndarrays, each of shape (Nsamples,)
+            vals = list(vals.T)
 
             flat_V_prior = False
             if Vs is not None:
@@ -285,9 +287,9 @@ def main():
                    'U' : ('U', '{:11g}'),
                    'Cvp' : ('Cv or Cp', '{:11g}'),
                    'S' : ('S', '{:11g}'),
-                   'low_percentile_config' : ('low % i', '{:10.0f}'),
-                   'mode_config' : ('mode i', '{:10.0f}'),
-                   'high_percentile_config' : ('high % i', '{:10.0f}'),
+                   'low_percentile_config' : ('low % i', '{:10d}'),
+                   'mode_config' : ('mode i', '{:10d}'),
+                   'high_percentile_config' : ('high % i', '{:10d}'),
                    'p_entropy' : ('ent(p)', '{:6.3f}'),
                    'V' : ('V', '{:8g}'),
                    'thermal_exp' : ('alpha', '{:9.3g}'),
@@ -300,7 +302,7 @@ def main():
 
         extensive_fields = ['log_Z', 'FG', 'U', 'Cvp', 'S', 'V', 'thermal_exp']
         if comm_rank == 0:
-            print("# ", infile, "n_walkers", n_walkers, "n_cull", n_cull)
+            print("# ", infile, "n_walkers", n_walkers, "n_cull", n_cull if isinstance(n_cull, int) else "VARIABLE")
 
             header_format = '# ' + T_format_s  + ' ' + ' '.join([str_format(formats.get(k, default_format)[1]) for k in item_keys])
             line_format =          T_format[1] + ' ' + ' '.join([formats.get(k, default_format)[1] for k in item_keys])

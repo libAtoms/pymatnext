@@ -9,7 +9,6 @@ def calc_log_a(iters, n_walkers, n_cull, discrete=False):
         assert np.all(iters[1:] - iters[:-1] == 1)
         # fraction remaining after each iteration
         fracs = (n_walkers - n_cull) / n_walkers
-        print("fracs", fracs)
         # volume remaining after iteration i
         # vol_i = \prod_{j=0..i} frac_i
         # weight of configs culled in iteration i
