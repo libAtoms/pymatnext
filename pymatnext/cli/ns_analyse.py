@@ -406,11 +406,10 @@ def main():
                                 section_start = T_i
                         plot_section_start = max(section_start - 1, 0)
                         plot_section_end = len(plot_data['T'])
-                        if not got_label:
-                            use_label = label
+
                         pp(plot_data['T'][plot_section_start:plot_section_end], plot_data[pfield][plot_section_start:plot_section_end],
                            linestyle if valid_Ts_bool[section_start] else ':',
-                           color=color, label=use_label)
+                           color=color, label=None if got_label else label)
 
                         ax[pfield].set_ylabel(header_col(pfield))
 
