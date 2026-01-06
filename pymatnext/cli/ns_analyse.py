@@ -44,10 +44,10 @@ def main():
     pressure_g.add_argument('--delta_P',  help="""delta pressure to use for reweighting (works best with flat V prior)""", type=float)
     p.add_argument('--entropy', '-S', action='store_true', help="""compute and print entropy (relative to entropy of lowest T structure""")
     p.add_argument('--probability_entropy_minimum', type=float, help="""probability entropy mininum that indicates a problem with sampling""", default=5.0)
-    p.add_argument('--plot', '-p', nargs='*', help="""column names to plot. Python expression can be used, with '{colname}'"""
-                                                   """replaced by the value of the quantity, and 'natoms' by the number of atoms."""
-                                                   """Plotted on a semi-log axis if name or expression is enclosed by 'log(..)'."""
-                                                   """If no column names provided, list allowed names and abort""")
+    p.add_argument('--plot', '-p', nargs='*', help="""column names to plot. Python expression can be used, with '{colname}' """
+                                                   """replaced by the value of the quantity, and 'natoms' by the number of atoms. """
+                                                   """Plotted on a semi-log axis if name or expression is enclosed by 'log(..)'. """
+                                                   """If no column names provided, list allowed names and abort.""")
     p.add_argument('--plot_together', help="""output filename for combined plot""")
     p.add_argument('--plot_together_filenames', action='store_true', help="""show filenames in combined plot""")
     p.add_argument('--plot_twinx_spacing', type=float, help="""spacing for extra twinx y axes""", default=0.15)
