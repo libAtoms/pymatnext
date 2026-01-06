@@ -114,6 +114,8 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
         added analytically to energies and specific heats
     p_entropy_min: float, default 5
         minimum value of entropy of probability distribution that indicates a problem (poor sampling, e.g. with P reweighting)
+    sum_f: function
+        function with API equivalent to np.sum, e.g. more accurate sum
 
     Returns
     -------
@@ -175,7 +177,7 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
                     'U': U,
                     'S': (U - Helmholtz_F) * beta,
                     'Cvp': Cvp}
-    if N_atoms is not None and any(N_atoms != N_atoms[0]):
+    if N_atoms is not None:
         results_dict['N'] = N
 
     if Vs is not None:
