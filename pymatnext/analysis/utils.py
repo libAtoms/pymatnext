@@ -135,9 +135,9 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
 
     if N_atoms is not None:
         N = sum_f(Z_term * N_atoms) / Z_term_sum
-        n_extra_DOF * N
 
-    U = n_extra_DOF / (2.0 * beta) + U_pot + E_shift
+    U_extra_DOF = n_extra_DOF / (2.0 * beta)
+    U = U_pot + U_extra_DOF + E_shift
 
     Cvp = n_extra_DOF * kB / 2.0 + kB * beta * beta * (sum(Z_term * Es**2) / Z_term_sum - U_pot**2)
 
@@ -166,7 +166,7 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     log_Z += log_f
 
     # also add the E_shift
-    Helmholtz_F = -log_Z / beta + E_shift
+    Helmholtz_F = -log_Z / beta + U_extra_DOF + E_shift
 
     mode_config = np.argmax(Z_term)
 
