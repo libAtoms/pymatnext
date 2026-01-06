@@ -233,6 +233,12 @@ def sample(args, MPI, NS_comm, walker_comm):
         print("params = ", end="")
         pprint.pprint(params, sort_dicts=False)
 
+    # Only for one walker runs, allow culled config to be source of clone
+    if ns.n_configs_global == 1:
+        clone_index_exclude = 0
+    else:
+        clone_index_exclude = 1
+
     time_prev_stdout_report = time.time()
     for loop_iter in loop_iterable:
         if exit_cond(ns, loop_iter):
@@ -254,7 +260,8 @@ def sample(args, MPI, NS_comm, walker_comm):
                               adjust_factor=params_step_size_tune["adjust_factor"])
 
         # pick random config as source for clone.
-        global_ind_of_clone_source = (global_ind_of_max + 1 + ns.rng_global.integers(0, ns.n_configs_global - 1)) % ns.n_configs_global
+        global_ind_of_clone_source = (global_ind_of_max + clone_index_exclude +
+                                      ns.rng_global.integers(0, ns.n_configs_global - clone_index_exclude)) % ns.n_configs_global
         rank_of_clone_source, local_ind_of_clone_source = ns.local_ind(global_ind_of_clone_source)
 
         if clone_history_file:

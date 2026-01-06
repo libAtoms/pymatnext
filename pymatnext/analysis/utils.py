@@ -44,7 +44,7 @@ def calc_log_a(iters, n_walkers, n_cull, discrete=False):
     return log_a
 
 
-def calc_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
+def calc_log_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
     """Return the terms that sum to Z
 
     Parameters
@@ -64,7 +64,7 @@ def calc_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
 
     Returns
     -------
-    Z_term: list of terms that sum to Z, multipled by exp(-shift)
+    log_Z_term: list of logs of terms that sum to Z, shifted by -log_shift
     log_shift: shift subtracted from each log(Z_term_true) to get log(Z_term)
     """
     log_Z_term = log_a[:] - beta * Es[:]
@@ -75,9 +75,10 @@ def calc_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None):
         log_Z_term += N_atoms * np.log(Vs[:])
 
     log_shift = np.amax(log_Z_term[:])
-    Z_term = np.exp(log_Z_term[:] - log_shift)
+    # Z_term = np.exp(log_Z_term[:] - log_shift)
+    log_Z_term -= log_shift
 
-    return (Z_term, log_shift)
+    return (log_Z_term, log_shift)
 
 
 def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, n_extra_DOF, p_entropy_min=5.0, sum_f=np.sum):
@@ -121,7 +122,8 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     beta = 1.0 / (kB * T)
 
     # Z_term here is actually Z_term_true * exp(-log_shift)
-    (Z_term, log_shift) = calc_Z_terms(beta, log_a, Es, flat_V_prior, N_atoms, Vs)
+    (log_Z_term, log_shift) = calc_log_Z_terms(beta, log_a, Es, flat_V_prior, N_atoms, Vs)
+    Z_term = np.exp(log_Z_term)
 
     # Note that
     #     Z_term = Z_term_true * exp(-log_shift)
@@ -154,11 +156,12 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     # undo shift of Z_term
     log_Z = np.log(Z_term_sum) + log_shift
 
+    # to make sure that Helmholtz_F approaches U at T -> 0,
     # we want last Z term to have w = 1, so we define a factor f which scales it correctly
     #    f exp(log_shift) Z_term[-1] = 1.0 * exp(-beta Es[-1])
     #    f = exp(-beta Es[-1] - log_shift) / Z_term[-1]
     #    log(f) = -beta Es[-1] - log_shift - log(Z_term[-1])
-    log_f = -beta * Es[-1] - log_shift - np.log(Z_term[-1])
+    log_f = -beta * Es[-1] - log_shift - log_Z_term[-1]
     # this factor rescales every term in Z
     log_Z += log_f
 
@@ -166,7 +169,6 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     Helmholtz_F = -log_Z / beta + E_shift
 
     mode_config = np.argmax(Z_term)
-
 
     results_dict = {'log_Z': log_Z,
                     'FG': Helmholtz_F,
