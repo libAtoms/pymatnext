@@ -175,6 +175,8 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
                     'U': U,
                     'S': (U - Helmholtz_F) * beta,
                     'Cvp': Cvp}
+    if N_atoms is not None and any(N_atoms != N_atoms[0]):
+        results_dict['N'] = N
 
     if Vs is not None:
         results_dict['V'] = V
