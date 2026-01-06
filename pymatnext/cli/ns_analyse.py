@@ -44,8 +44,10 @@ def main():
     pressure_g.add_argument('--delta_P',  help="""delta pressure to use for reweighting (works best with flat V prior)""", type=float)
     p.add_argument('--entropy', '-S', action='store_true', help="""compute and print entropy (relative to entropy of lowest T structure""")
     p.add_argument('--probability_entropy_minimum', type=float, help="""probability entropy mininum that indicates a problem with sampling""", default=5.0)
-    p.add_argument('--plot', '-p', nargs='*', help="""column names to plot, or optionally 'log(colname)'. """
-                                                   """If no column names provided, list allowed names and abort""")
+    p.add_argument('--plot', '-p', nargs='*', help="""column names to plot. Python expression can be used, with '{colname}' """
+                                                   """replaced by the value of the quantity, and 'natoms' by the number of atoms. """
+                                                   """Plotted on a semi-log axis if name or expression is enclosed by 'log(..)'. """
+                                                   """If no column names provided, list allowed names and abort.""")
     p.add_argument('--plot_together', help="""output filename for combined plot""")
     p.add_argument('--plot_together_filenames', action='store_true', help="""show filenames in combined plot""")
     p.add_argument('--plot_twinx_spacing', type=float, help="""spacing for extra twinx y axes""", default=0.15)
@@ -85,12 +87,16 @@ def main():
     ax = {}
 
     def colname(colname_str):
-        m = re.match(r'log\(([^)]*)\)$', colname_str)
+        # strip off optional log()
+        m = re.match(r'^log\((.*)\)$', colname_str)
+        if m:
+            colname_str = m.group(1)
+        # extract col name
+        m = re.match(r'\{([^}]*)\}', colname_str)
         if m:
             return m.group(1)
         else:
             return colname_str
-
 
     for infile_i, infile in enumerate(args.infile):
         iters = []
@@ -346,8 +352,17 @@ def main():
                     fig = Figure()
                     ax = {}
                 for field_i, pfield in enumerate(args.plot):
-                    # should this be done here?  should it be more general, e.g. eval()?
-                    col_log = pfield.startswith('log')
+                    # check for log axis
+                    col_log = re.match(r'^log\(.*\)$', pfield)
+
+                    # check for arb math
+                    m = re.match(r'^(.*){([^}]*)}(.*)$', pfield)
+                    if m:
+                        expr = m.group(1) + m.group(2) + m.group(3)
+                        c = colname(pfield)
+                        plot_data[c] = np.asarray([eval(expr, {}, {'natoms': results_dict['N'], c: v}) for v in plot_data[c]])
+
+                    # replace pfield with colname
                     pfield = colname(pfield)
                     if len(ax) == 0:
                         ax[pfield] = fig.add_subplot()
@@ -391,11 +406,10 @@ def main():
                                 section_start = T_i
                         plot_section_start = max(section_start - 1, 0)
                         plot_section_end = len(plot_data['T'])
-                        if not got_label:
-                            use_label = label
+
                         pp(plot_data['T'][plot_section_start:plot_section_end], plot_data[pfield][plot_section_start:plot_section_end],
                            linestyle if valid_Ts_bool[section_start] else ':',
-                           color=color, label=use_label)
+                           color=color, label=None if got_label else label)
 
                         ax[pfield].set_ylabel(header_col(pfield))
 
