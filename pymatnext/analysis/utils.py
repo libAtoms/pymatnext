@@ -186,9 +186,17 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
 
     # compute range of configs that contributes significantly to sum
     Z_term_cumsum = np.cumsum(Z_term)
-    low_percentile_config = np.where(Z_term_cumsum < 0.01 * Z_term_sum)[0][-1]
-    high_percentile_config = np.where(Z_term_cumsum > 0.99 * Z_term_sum)[0][0] + 1
-    high_percentile_config = min(high_percentile_config, len(Z_term) - 1)
+    low_inds = np.where(Z_term_cumsum < 0.01 * Z_term_sum)[0]
+    if len(low_inds) == 0:
+        low_percentile_config = 0
+    else:
+        low_percentile_config = low_inds[-1]
+    high_inds = np.where(Z_term_cumsum > 0.99 * Z_term_sum)[0]
+    if len(high_inds) > 0:
+        high_percentile_config = high_inds[0] + 1
+        high_percentile_config = min(high_percentile_config, len(Z_term) - 1)
+    else:
+        high_percentile_config = len(Z_term) - 1
 
     probabilities = Z_term / Z_term_sum
     probabilities = probabilities[np.where(probabilities > 0.0)]
