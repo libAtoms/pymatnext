@@ -332,7 +332,7 @@ def sample(args, MPI, NS_comm, walker_comm):
 
         loop_iter += 1
 
-    if not exit_normal_loop_iterable:
+    if exit_normal_loop_iterable:
         warnings.warn("Exiting due to reaching max iteration number")
 
     if ns_file:
