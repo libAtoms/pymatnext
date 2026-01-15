@@ -239,9 +239,12 @@ def sample(args, MPI, NS_comm, walker_comm):
     else:
         clone_index_exclude = 1
 
+    exit_normal_loop_iterable = True
     time_prev_stdout_report = time.time()
     for loop_iter in loop_iterable:
         if exit_cond(ns, loop_iter):
+            warnings.warn(f'Exiting due to exit conditions {params["ns"]["exit_conditions"]}')
+            exit_normal_loop_iterable = False
             break
 
         # max info should already be set to: ns.rank_of_max, ns.local_ind_of_max, ns.max_val, ns.max_quants
@@ -328,6 +331,9 @@ def sample(args, MPI, NS_comm, walker_comm):
             ns.snapshot(loop_iter, output_filename_prefix, save_old=snapshot_save_old)
 
         loop_iter += 1
+
+    if not exit_normal_loop_iterable:
+        warnings.warn("Exiting due to reaching max iteration number")
 
     if ns_file:
         ns_file.close()
