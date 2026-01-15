@@ -251,7 +251,6 @@ def walk_cell(ns_atoms, Emax, rng):
         E, F = extract_E_F(ns_atoms.calc, True)
         # set atoms from current lammps internal state
         types, pos, vel = get_pointers_from_lammps(ns_atoms)
-        print("BOB fresh types", types)
         set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
         # Not clear why cell moves require wrapping, but in practice they appear to
         atoms.wrap()
