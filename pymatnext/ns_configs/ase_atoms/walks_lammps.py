@@ -20,14 +20,15 @@ import lammps
 # which is equivalent to
 #   E + P dV < Emax^lammps
 
-def set_lammps_from_atoms(ns_atoms):
-    """set lammps internal configuration data (cell, types, positions, velocities) from
-    ns_atoms object
+def get_pointers_from_lammps(ns_atoms):
+    """Get pointers to LAMMPS data strucutures.  Note that if these are
+    copies rather than views of the underlying C++ data, code trying to
+    _set_ the returned values will not behave as expected.
 
     Parameters
     ----------
     ns_atoms: NSConfig_ASE_Atoms
-        object containing configuration and lammps calculator to copoy from
+        object containing configuration and lammps calculator to copy from
 
     Returns
     -------
@@ -38,6 +39,22 @@ def set_lammps_from_atoms(ns_atoms):
     vel: np.ndarray(N_atoms, d, dtype=float)
         internal LAMMPS data with atomic velocities
     """
+    n_atoms = len(ns_atoms.atoms)
+    types = ns_atoms.calc.numpy.extract_atom("type")[:n_atoms]
+    pos = ns_atoms.calc.numpy.extract_atom("x")[:n_atoms]
+    vel = ns_atoms.calc.numpy.extract_atom("v")[:n_atoms]
+
+    return types, pos, vel
+
+def set_lammps_from_atoms(ns_atoms):
+    """set lammps internal configuration data (cell, types, positions, velocities) from
+    ns_atoms object
+
+    Parameters
+    ----------
+    ns_atoms: NSConfig_ASE_Atoms
+        object containing configuration and lammps calculator to copoy from
+    """
 
     atoms = ns_atoms.atoms
 
@@ -47,15 +64,11 @@ def set_lammps_from_atoms(ns_atoms):
     ns_atoms.calc.command(cell_cmd)
 
     # get per-atom pointers from LAMMPS
-    types = ns_atoms.calc.numpy.extract_atom("type")
-    pos = ns_atoms.calc.numpy.extract_atom("x")
-    vel = ns_atoms.calc.numpy.extract_atom("v")
+    types, pos, vel = get_pointers_from_lammps(ns_atoms)
     # set them to current value
     types[:] = ns_atoms.type_of_Z[atoms.numbers]
     pos[:] = atoms.positions
     vel[:] = atoms.arrays["NS_velocities"]
-
-    return types, pos, vel
 
 def set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, update_energy_shift):
     """set ns_atoms.atoms object from lammps internal configuration data
@@ -143,7 +156,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
     # for LAMMPS RanMars RNG
     lammps_seed = rng.integers(1, 900000000)
 
-    types, pos, vel = set_lammps_from_atoms(ns_atoms)
+    set_lammps_from_atoms(ns_atoms)
 
     Emax -= atoms.info["NS_energy_shift"]
     ns_atoms.calc.command(f"fix NS all ns/gmc {lammps_seed} {Emax}")
@@ -166,6 +179,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
 
     if not reject:
         # set atoms from current lammps internal state
+        types, pos, vel = get_pointers_from_lammps(ns_atoms)
         set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, False)
         # wrap to avoid atoms moving far enough in periodic images for lammps to lose them
         atoms.wrap()
@@ -202,7 +216,7 @@ def walk_cell(ns_atoms, Emax, rng):
     step_size_shear = ns_atoms.step_size["cell_shear_per_rt3_atom"] * (N_atoms ** (1.0 / 3.0))
     step_size_stretch = ns_atoms.step_size["cell_stretch"]
 
-    types, pos, vel = set_lammps_from_atoms(ns_atoms)
+    set_lammps_from_atoms(ns_atoms)
 
     Emax -= atoms.info["NS_energy_shift"]
     move_params_cell = ns_atoms.move_params["cell"]
@@ -236,6 +250,8 @@ def walk_cell(ns_atoms, Emax, rng):
         # Must recompute in case last move was rejected 
         E, F = extract_E_F(ns_atoms.calc, True)
         # set atoms from current lammps internal state
+        types, pos, vel = get_pointers_from_lammps(ns_atoms)
+        print("BOB fresh types", types)
         set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
         # Not clear why cell moves require wrapping, but in practice they appear to
         atoms.wrap()
@@ -281,7 +297,7 @@ def walk_type(ns_atoms, Emax, rng):
     # for LAMMPS RanMars RNG
     lammps_seed = rng.integers(1, 900000000)
 
-    types, pos, vel = set_lammps_from_atoms(ns_atoms)
+    set_lammps_from_atoms(ns_atoms)
 
     Emax -= atoms.info["NS_energy_shift"]
     move_params_type = ns_atoms.move_params["type"]
@@ -308,6 +324,7 @@ def walk_type(ns_atoms, Emax, rng):
         # Must recompute in case last move was rejected 
         E, F = extract_E_F(ns_atoms.calc, True)
         # set atoms from current lammps internal state
+        types, pos, vel = get_pointers_from_lammps(ns_atoms)
         set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
 
     # not actually always satisfied, e.g. if there's degeneracy (so some config 
