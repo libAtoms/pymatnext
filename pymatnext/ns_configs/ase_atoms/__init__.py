@@ -24,6 +24,11 @@ try:
     import lammps
 except ModuleNotFoundError:
     lammps = None
+try:
+    import lammps.mliap
+except ModuleNotFoundError:
+    pass
+
 
 class NSConfig_ASE_Atoms():
     """Nested sampling configuration class containing an Atoms object
@@ -297,6 +302,8 @@ class NSConfig_ASE_Atoms():
 
             lammps_name = params_calc["args"].get("name", "")
             self.calc = lammps.lammps(lammps_name, lammps_cmd_args)
+            if params_calc["args"].get("activate_mliappy_kokkos", False):
+                lammps.mliap.activate_mliappy_kokkos(self.calc)
             for cmd in lammps_header:
                 self.calc.command(cmd)
             self.calc.command("boundary " + " ".join([params_calc["args"].get("boundary", "p")] * 3))
