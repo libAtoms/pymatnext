@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 
 def calc_log_a(iters, n_walkers, n_cull, discrete=False):
@@ -9,6 +10,12 @@ def calc_log_a(iters, n_walkers, n_cull, discrete=False):
         assert np.all(iters[1:] - iters[:-1] == 1)
         # fraction remaining after each iteration
         fracs = (n_walkers - n_cull) / n_walkers
+        pathological_iters = np.where(fracs == 0)[0]
+        if len(pathological_iters) != 0:
+            logging.warning(f"Found fraction culled = 1 at iters {pathological_iters}. "
+                            "Sign of underconvergence w.r.t. number of walkers")
+            fracs[pathological_iters] = 1.0 / (n_walkers + 1.0)
+
         # volume remaining after iteration i
         # vol_i = \prod_{j=0..i} frac_i
         # weight of configs culled in iteration i
