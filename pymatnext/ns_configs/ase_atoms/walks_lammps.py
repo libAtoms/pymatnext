@@ -135,6 +135,88 @@ def extract_E_F(lmp, recalc):
     return (lmp.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR),
             lmp.numpy.extract_atom("f")[:nlocal])
 
+def walk_combined(ns_atoms, Emax, rng, walk_len):
+    ns_atoms.calc.command("unfix NS")
+    atoms = ns_atoms.atoms
+    # for LAMMPS RanMars RNG
+    lammps_seed = rng.integers(1, 900000000)
+
+    set_lammps_from_atoms(ns_atoms)
+
+    Emax -= atoms.info["NS_energy_shift"]
+    pPos = ns_atoms.walk_prob[ns_atoms._walk_moves.index("gmc")]
+    pCell = ns_atoms.walk_prob[ns_atoms._walk_moves.index("cell")]
+    pType = ns_atoms.walk_prob[ns_atoms._walk_moves.index("type")]
+    fix_cmd = f"fix NS all ns {lammps_seed} {Emax} {pPos} {pCell} {pType}"
+
+    if pPos > 0.0:
+        fix_cmd += f" {ns_atoms.walk_traj_len['gmc']} {ns_atoms.step_size['pos_gmc_each_atom']}"
+    if pCell > 0.0:
+        move_params_cell = ns_atoms.move_params["cell"]
+        submove_probs = move_params_cell["submove_probabilities"]
+        N_atoms = len(atoms)
+        step_size_volume = ns_atoms.step_size["cell_volume_per_atom"] * N_atoms
+        step_size_shear = ns_atoms.step_size["cell_shear_per_rt3_atom"] * (N_atoms ** (1.0 / 3.0))
+        step_size_stretch = ns_atoms.step_size["cell_stretch"]
+        fix_cmd += (f" {ns_atoms.walk_traj_len['cell']} "
+                    f"{move_params_cell['min_aspect_ratio']} {ns_atoms.pressure} "
+                    f"{submove_probs['volume']} {step_size_volume} "
+                    f"{submove_probs['stretch']} {step_size_stretch} "
+                    f"{submove_probs['shear']} {step_size_shear} "
+                    f"{'yes' if ns_atoms.move_params['cell']['flat_V_prior'] else 'no'}")
+    if pType > 0.0:
+        move_params_type = ns_atoms.move_params["type"]
+        fix_cmd += f" {ns_atoms.walk_traj_len['type']}"
+        if move_params_type["sGC"]:
+            # NOTE: if we don't mind being unable to change mu, we can construct this
+            # string once when we set up the calculator
+            fix_cmd += " yes " + " ".join([f"{mu:.10f}" for mu in ns_atoms.mu[ns_atoms.Z_of_type[1:]]])
+        else:
+            fix_cmd += " no"
+
+    ns_atoms.calc.command(fix_cmd)
+    try:
+        ns_atoms.calc.command(f"run {walk_len} post no")
+        failed = False
+    except Exception as exc:
+        exc_str = str(exc)
+        warnings.warn(f"LAMMPS ns/gmc run raised exception {exc_str}")
+        if "Lost atoms" in exc_str:
+            # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+            ns_atoms.end_calculator()
+            # don't store new calculator results, since they may be from wrong positions
+            ns_atoms.init_calculator(skip_initial_store=True)
+        failed = True
+
+    if not failed:
+        # recompute, in case last step inside LAMMPS was a rejection
+        E, F = extract_E_F(ns_atoms.calc, True)
+        # set atoms from current lammps internal state
+        types, pos, vel = get_pointers_from_lammps(ns_atoms)
+        set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
+        # wrap to avoid atoms moving far enough in periodic images for lammps to lose them
+        atoms.wrap()
+
+    # gather number of attempted and accepted moves from fix
+    # positions 0-1
+    pos_n_att = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 0, 0))
+    pos_n_acc = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 1, 0))
+    # cell 2-7
+    cell_n_att = {}
+    cell_n_acc = {}
+    for submove_i, submove_type in enumerate(["volume", "stretch", "shear"]):
+        cell_n_att[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 + 2 * submove_i + 0, 0))
+        cell_n_acc[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 + 2 * submove_i + 1, 0))
+    ## no need to extract for type
+    ## type 8-9
+    ## type_n_att = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 + 2 * 3 + 0, 0))
+    ## type_n_acc = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 + 2 * 3 + 1, 0))
+
+    return [("pos_gmc_each_atom", pos_n_att, pos_n_acc),
+            ("cell_volume_per_atom", cell_n_att["volume"], cell_n_acc["volume"]),
+            ("cell_shear_per_rt3_atom", cell_n_att["shear"], cell_n_acc["shear"]),
+            ("cell_stretch", cell_n_att["stretch"], cell_n_acc["stretch"])]
+
 def walk_pos_gmc(ns_atoms, Emax, rng):
     """walk atomic positions with GMC
 
@@ -185,7 +267,6 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         atoms.wrap()
 
     return [("pos_gmc_each_atom", 1, 0 if reject else 1)]
-
 
 def walk_cell(ns_atoms, Emax, rng):
     """walk atomic cell with MC

@@ -55,5 +55,7 @@ param_defaults_walk = {
     "type": {
         "sGC": False,
         "mu": { "_IGNORE_": True }
-    }
+    },
+
+    "combined": False
 }
