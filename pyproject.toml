@@ -13,7 +13,7 @@
     ns_analyse_traj = "pymatnext.cli.ns_analyse_traj:main"
 
 [tool.setuptools.packages.find]
-    exclude = [ "test*" ]
+    exclude = [ "test*", "build" ]
 
 [tool.setuptools.dynamic]
     version = {attr  = "pymatnext.__version__"}
