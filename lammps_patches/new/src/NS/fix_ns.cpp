@@ -1,0 +1,1021 @@
+/* ----------------------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   http://lammps.sandia.gov, Sandia National Laboratories
+   Steve Plimpton, sjplimp@sandia.gov
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+
+#ifdef DEBUG
+#include <iostream>
+#endif
+
+#include <stdio.h>
+#include <string.h>
+#include "fix_ns.h"
+#include "atom.h"
+#include "comm.h"
+#include "force.h"
+#include "pair.h"
+#include "modify.h"
+#include "compute.h"
+#include "update.h"
+#include "random_mars.h"
+#include "domain.h"
+#include "memory.h"
+#include "respa.h"
+#include "error.h"
+#include "math_extra.h"
+#include <math.h>
+
+using namespace LAMMPS_NS;
+using namespace FixConst;
+
+#define MOVE_UNDEF -1
+#define MOVE_NONE 0
+#define MOVE_POS 1
+#define MOVE_CELL 2
+#define MOVE_TYPE 3
+#define MOVE_VOL 20
+#define MOVE_STRETCH 21
+#define MOVE_SHEAR 22
+
+/* ---------------------------------------------------------------------- */
+
+void normalize_cumul_probs_3(double &p1, double &p2, double &p3) {
+  p1 = (p1 < 0.0) ? 0.0 : p1;
+  p2 = (p2 < 0.0) ? 0.0 : p2;
+  p3 = (p3 < 0.0) ? 0.0 : p3;
+  double pSum = p1 + p2 + p3;
+  p1 /= pSum; p2 /= pSum; p3 /= pSum;
+
+  // make into cumulative probabilities
+  p2 += p1;
+  if (p3 == 0.0) {
+    p2 = 1.0;
+  }
+  p3 = 1.0;
+}
+
+FixNS::FixNS(LAMMPS *lmp, int narg, char **arg) :
+  Fix(lmp, narg, arg), dx(NULL), prevx(NULL), prevtype(NULL), mu(NULL)
+{
+  // possible values: base 3 + global 2 + probabilities 3 + 1? + 9? + (1 + ntype)?
+  if (strcmp(style,"ns") != 0 && narg <= 3 + 2 + 3)
+    error->all(FLERR,"Illegal fix ns command");
+
+  // before ns-specific params
+  int iarg = 3;
+
+  // global NS params
+  seed = utils::inumeric(FLERR,arg[iarg++],true,lmp);
+  Emax = utils::numeric(FLERR,arg[iarg++],true,lmp);
+
+  // probabilities of move types
+  pPos = utils::numeric(FLERR,arg[iarg++],true,lmp);
+  pCell = utils::numeric(FLERR,arg[iarg++],true,lmp);
+  pType = utils::numeric(FLERR,arg[iarg++],true,lmp);
+
+  pos_n_steps = cell_n_steps = type_n_steps = 0;
+
+  // pos GMC params
+  if (pPos > 0.0) {
+    if (narg - iarg < 2)
+      error->all(FLERR,"Illegal fix ns command when parsing pos GMC arguments");
+    pos_n_steps = utils::inumeric(FLERR,arg[iarg++],true,lmp);
+    gmc_step_size = utils::numeric(FLERR,arg[iarg++],true,lmp);
+    memory->create(dx,atom->nmax,3,"ns:dx");
+    memory->create(prevx,atom->nmax,3,"ns:prevx");
+  }
+
+  // cell MC params
+  if (pCell > 0.0) {
+    if (narg - iarg < 3 + 6 + 1)
+      error->all(FLERR,"Illegal fix ns command when parsing cell MC arguments");
+
+    if (!domain->triclinic)
+      error->all(FLERR,"fix ns cell moves require triclinic box (for now)");
+
+    cell_n_steps = utils::inumeric(FLERR,arg[iarg++],true,lmp);
+    min_aspect_ratio = utils::numeric(FLERR,arg[iarg++],true,lmp);
+    pressure = utils::numeric(FLERR,arg[iarg++],true,lmp);
+
+    pVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
+    dVol = utils::numeric(FLERR,arg[iarg++],true, lmp);
+    pStretch = utils::numeric(FLERR,arg[iarg++],true, lmp);
+    dStretch = utils::numeric(FLERR,arg[iarg++],true, lmp);
+    pShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
+    dShear = utils::numeric(FLERR,arg[iarg++],true, lmp);
+    flat_V_prior = 1;
+    if (strcmp(arg[iarg],"no") == 0) flat_V_prior = 0;
+    else if (strcmp(arg[iarg],"yes") != 0)
+      error->all(FLERR,"Illegal fix ns flat_V_prior value");
+    iarg++;
+
+#ifdef DEBUG
+std::cout << "DEBUG initial vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
+#endif
+    normalize_cumul_probs_3(pVol, pStretch, pShear);
+#ifdef DEBUG
+std::cout << "DEBUG normalized cumulative vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
+#endif
+
+    if (!prevx)
+      memory->create(prevx,atom->nmax,3,"ns:prevx");
+
+    // from fix_nh.cpp
+    // who knows what other things may be needed?
+    box_change |= (BOX_CHANGE_X | BOX_CHANGE_Y | BOX_CHANGE_Z |
+                   BOX_CHANGE_YZ | BOX_CHANGE_XZ | BOX_CHANGE_XY);
+    no_change_box = 1;
+  }
+
+  unequal_cutoffs = false;
+  // type MC params
+  if (pType > 0.0) {
+    if (narg - iarg < 2)
+      error->all(FLERR,"Illegal fix ns command when parsing type MC arguments");
+
+    type_n_steps = utils::inumeric(FLERR,arg[iarg++],true,lmp);
+    semi_GC_flag = 1;
+    if (strcmp(arg[iarg],"no") == 0) semi_GC_flag = 0;
+    else if (strcmp(arg[iarg],"yes") != 0)
+      error->all(FLERR,"Illegal fix ns/type semi_GC_flag value");
+    iarg++;
+
+    if (semi_GC_flag) {
+      if (narg - iarg < atom->ntypes)
+        error->all(FLERR,"Illegal fix ns command when parsing type MC mu arguments");
+
+      mu = new double[atom->ntypes];
+      for (int i=0; i < atom->ntypes; i++) {
+        mu[i] = utils::numeric(FLERR,arg[iarg++],true,lmp);
+      }
+    } else {
+      mu = 0;
+    }
+
+    // based on fix_atom_swap.cpp
+    int ntypes = atom->ntypes;
+    double **cutsq = force->pair->cutsq;
+    for (int itype = 1; itype <= ntypes; itype++)
+      for (int jtype = 1; jtype <= ntypes; jtype++)
+        for (int ktype = 1; ktype <= ntypes; ktype++)
+          if (cutsq[itype][ktype] != cutsq[jtype][ktype])
+            unequal_cutoffs = true;
+    if (unequal_cutoffs)
+      error->warning(FLERR,"unequal cutoffs may cause a problem for atom type moves");
+
+    memory->create(prevtype,atom->nmax,"ns:prevtype");
+#ifdef SWAP_POS
+    if (!prevx)
+      memory->create(prevx,atom->nmax,3,"ns:prevx");
+#endif
+  }
+
+#ifdef DEBUG
+std::cout << "DEBUG initial pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
+#endif
+  normalize_cumul_probs_3(pPos, pCell, pType);
+#ifdef DEBUG
+std::cout << "DEBUG cumulative normalized pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
+#endif
+
+  max_n_steps = (pos_n_steps > cell_n_steps) ? pos_n_steps : cell_n_steps;
+  max_n_steps = (max_n_steps > type_n_steps) ? max_n_steps : type_n_steps;
+
+  if (narg - iarg < 0)
+    error->all(FLERR,"Illegal fix ns command - extra arguments left after parsing");
+
+  cell_cur_move = MOVE_UNDEF;
+  state_cur_move = MOVE_UNDEF;
+  state_traj_steps_remaining = 0;
+
+  // zero accumulated energy shifts
+  cumulative_dPV = cumulative_dmuN = 0.0;
+  // attempt frequency counters
+  vector_flag = 1;
+  size_vector = 2 + 6 + 2;
+  global_freq = 1;
+  extvector = 0;
+  n_attempt_pos = n_success_pos = 
+    n_attempt_vol = n_success_vol = 
+    n_attempt_stretch = n_success_stretch = 
+    n_attempt_shear = n_success_shear = 
+    n_attempt_type = n_success_type = 0;
+
+  // random_g will be used when all processes need to agree on the random
+  // number, so it uses the same seed on all.
+  // random_l will be used when each processes needs to do something different,
+  // and it may be called an unpredictable number of times, which will make it 
+  // diverge between the different processes.
+  random_g = new RanMars(lmp,seed);
+  random_l = new RanMars(lmp,seed + 1 + comm->me);
+
+  // copied from fix_gmc.cpp
+  dynamic_group_allow = 1;
+  time_integrate = 1;
+  // copied from atom_swap.cpp?
+  // set force_reneighbor so next_reneighbor is checked, but don't force it
+  // for the next step until we see what sort of step this is - only type 
+  // steps require (?) reneighbors
+  force_reneighbor = 1;
+  // next_reneighbor = update->ntimestep + 1;
+  next_reneighbor = -1;
+
+  // from MC/fix_atom_swap.cpp
+  // amount of data to be packed for inter-process comm (atom type)
+  if (atom->q_flag) 
+    comm_forward = 2;
+  else
+    comm_forward = 1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixNS::setmask()
+{
+  int mask = 0;
+  mask |= INITIAL_INTEGRATE;
+  mask |= PRE_EXCHANGE;
+  mask |= FINAL_INTEGRATE;
+  mask |= INITIAL_INTEGRATE_RESPA;
+  mask |= FINAL_INTEGRATE_RESPA;
+  return mask;
+}
+
+// from MC/fix_atom_swap.cpp
+int FixNS::pack_forward_comm(int n, int *list, double *buf, int /*pbc_flag*/, int * /*pbc*/)
+{
+  int i, j, m;
+
+  int *type = atom->type;
+  double *q = atom->q;
+
+  m = 0;
+
+  if (atom->q_flag) {
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      buf[m++] = type[j];
+      buf[m++] = q[j];
+    }
+  } else {
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      buf[m++] = type[j];
+    }
+  }
+
+  return m;
+}
+
+// from MC/fix_atom_swap.cpp
+void FixNS::unpack_forward_comm(int n, int first, double *buf)
+{
+  int i, m, last;
+
+  int *type = atom->type;
+  double *q = atom->q;
+
+  m = 0;
+  last = first + n;
+
+  if (atom->q_flag) {
+    for (i = first; i < last; i++) {
+      type[i] = static_cast<int>(buf[m++]);
+      q[i] = buf[m++];
+    }
+  } else {
+    for (i = first; i < last; i++) type[i] = static_cast<int>(buf[m++]);
+  }
+}
+
+void FixNS::init()
+{
+
+  int id = modify->find_compute("thermo_pe");
+
+  modify->compute[id]->invoked_scalar = -1;
+  pe_compute = modify->compute[id];
+  pe_compute->addstep(update->ntimestep+1);
+
+  if (strstr(update->integrate_style,"respa"))
+    error->all(FLERR,"fix ns not compatible with RESPA");
+}
+
+void FixNS::pre_exchange()
+{
+  if (state_cur_move == MOVE_TYPE) {
+    // force reneighbor for swaps (maybe only needed on accept, 
+    // or only with unequal cutoffs?)
+    next_reneighbor = update->ntimestep + 1;
+  } else {
+    next_reneighbor = -1;
+  }
+}
+
+void FixNS::initial_integrate(int vflag)
+{
+  // state machine for move types
+  if (state_traj_steps_remaining <= 0) {
+    // for now, give up on moving if there aren't enough steps left
+    // to accommodate longest (across 3 step types) mini-traj. This
+    // should ensure correct ratio of step types
+    if (update->laststep + 1 - update->ntimestep < max_n_steps) {
+#ifdef DEBUG
+std::cout << "initial_integrate not enough steps left " << update->laststep << " + 1 - " << update->ntimestep << " < " << max_n_steps << std::endl;
+#endif
+      // no time for another mini traj
+      state_cur_move = MOVE_NONE;
+    } else {
+      // pick new move type, all processes must agree
+      double rv = random_g->uniform();
+#ifdef DEBUG
+std::cout << "initial_integrate pick rv " << rv <<  " probs " << pPos << " " << pCell << " " << pType << std::endl;
+#endif
+      if (rv < pPos) {
+        state_cur_move = MOVE_POS;
+        pos_gmc_traj_prep();
+        state_traj_steps_remaining = pos_n_steps;
+      } else if (rv < pCell) {
+        state_cur_move = MOVE_CELL;
+        state_traj_steps_remaining = cell_n_steps;
+      } else {
+        state_cur_move = MOVE_TYPE;
+        state_traj_steps_remaining = type_n_steps;
+      }
+    }
+  }
+#ifdef DEBUG
+else
+std::cout << "initial_integrate continue with current move type" << std::endl;
+#endif
+
+  state_traj_steps_remaining--;
+
+  if (state_cur_move == MOVE_POS) {
+    pos_gmc_initial_integrate();
+  } else if (state_cur_move == MOVE_CELL) {
+    cell_initial_integrate();
+  } else if (state_cur_move == MOVE_TYPE) {
+    type_initial_integrate();
+    // move swapped or perturbed types, communicate to ghost atoms
+    comm->forward_comm(this);
+  }
+
+  int id = modify->find_compute("thermo_pe");
+
+  modify->compute[id]->invoked_scalar = -1;
+  pe_compute = modify->compute[id];
+  pe_compute->addstep(update->ntimestep+1);
+}
+
+void FixNS::pos_gmc_traj_prep()
+{
+  int nlocal = atom->nlocal;
+  if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+  double **x = atom->x;
+
+  double dx2sum = 0;
+
+  // if we ever want to maintain coherence of dx from traj to traj, we can do it 
+  // using atomic velocities:
+  // double **v = atom->v;
+
+  for(int i = 0; i < nlocal; i++) {
+    // random direction
+    dx[i][0] = random_l->gaussian();
+    dx[i][1] = random_l->gaussian();
+    dx[i][2] = random_l->gaussian();
+    dx2sum += dx[i][0]*dx[i][0]+dx[i][1]*dx[i][1]+dx[i][2]*dx[i][2];
+
+    // save initial pos in case we have to reject move
+    prevx[i][0] = x[i][0];
+    prevx[i][1] = x[i][1];
+    prevx[i][2] = x[i][2];
+  }
+
+  // WARNING this really needs to be summed over all MPI processes
+  dx2sum = sqrt(dx2sum);
+  for(int i = 0; i < nlocal; i++) {
+    dx[i][0] /= dx2sum;
+    dx[i][1] /= dx2sum;
+    dx[i][2] /= dx2sum;
+  }
+
+  n_attempt_pos += 1;
+}
+
+void FixNS::pos_gmc_initial_integrate()
+{
+#ifdef DEBUG
+std::cout << "POS pos_gmc_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
+#endif
+  // update x of atoms in group
+  double **x = atom->x;
+  int *mask = atom->mask;
+  int nlocal = atom->nlocal;
+  if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+
+  for (int i = 0; i < nlocal; i++)
+    if (mask[i] & groupbit) {
+      x[i][0] += gmc_step_size * dx[i][0];
+      x[i][1] += gmc_step_size * dx[i][1];
+      x[i][2] += gmc_step_size * dx[i][2];
+    }
+
+}
+
+void FixNS::cell_initial_integrate()
+{
+#ifdef DEBUG
+std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
+#endif
+  // do move (unles rejected)
+
+  int natoms = atom->natoms;
+  int nlocal = atom->nlocal;
+  if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+  double **x = atom->x;
+
+  // save previous cell and positions
+  for (int i=0; i < 3; i++) {
+    prev_boxlo[i] = domain->boxlo[i];
+    prev_boxhi[i] = domain->boxhi[i];
+  }
+  prev_xy = domain->xy;
+  prev_yz = domain->yz;
+  prev_xz = domain->xz;
+
+  for (int iat=0; iat < nlocal; iat++)
+    for (int j=0; j < 3; j++)
+        prevx[iat][j] = x[iat][j];
+
+  double boxext[3];
+  for (int i=0; i < 3; i++)
+    boxext[i] = domain->boxhi[i] - domain->boxlo[i];
+
+  cell_cur_move = MOVE_UNDEF;
+  cell_move_rejected_early = false;
+
+  // keep track of change PV in this step
+  // default to 0, set otherwise when volume move is selected
+  dPV = 0.0;
+
+  // default to accept, will be changed below to reject (-1.0) or probablistic (if flat_V_prior != 1)
+  double rv = random_g->uniform();
+  double new_cell[3][3];
+  // pick a step type
+  if (rv < pVol) {
+    n_attempt_vol++;
+    cell_cur_move = MOVE_VOL;
+    // volume step
+    double orig_V;
+    if (domain->dimension == 3) orig_V = domain->xprd * domain->yprd * domain->zprd;
+    else orig_V = domain->xprd * domain->yprd;
+
+    double dV = random_g->gaussian(0.0, dVol);
+    double new_V = orig_V + dV;
+#ifdef DEBUG
+    std::cout << "CELL VOLUME volumetric strain " << dV << " / " << orig_V << " = " << dV/orig_V << " ";
+#endif
+    if (new_V/orig_V < 0.5) {
+      cell_move_rejected_early = true;
+#ifdef DEBUG
+      std::cout << "CELL REJECT new_V/orig_V < 0.5" << std::endl;
+#endif
+    } else {
+      if (flat_V_prior == 0 && new_V < orig_V && random_g->uniform() > pow(new_V / orig_V, natoms)) {
+        cell_move_rejected_early = true;
+#ifdef DEBUG
+        std::cout << "CELL REJECT V probability " << pow(new_V / orig_V, natoms) << std::endl;
+#endif
+      } else {
+        double transform_diag = pow(new_V / orig_V, 1.0/3.0);
+        new_cell[0][0] = boxext[0] * transform_diag;
+        new_cell[0][1] = 0.0;
+        new_cell[0][2] = 0.0;
+        new_cell[1][0] = domain->xy * transform_diag;
+        new_cell[1][1] = boxext[1] * transform_diag;
+        new_cell[1][2] = 0.0;
+        new_cell[2][0] = domain->xz * transform_diag;
+        new_cell[2][1] = domain->yz * transform_diag;
+        new_cell[2][2] = boxext[2] * transform_diag;
+        dPV = pressure * dV;
+      }
+    }
+  } else if (rv < pStretch) {
+    n_attempt_stretch++;
+    cell_cur_move = MOVE_STRETCH;
+    // stretch step
+    // pick directions to use v_ind and (v_ind+1)%3
+#ifdef DEBUG
+    std::cout << "CELL STRETCH ";
+#endif
+    int v_ind = int(3 * random_g->uniform()) % 3;
+    rv = random_g->gaussian(0.0, dStretch);
+    double transform_diag[3];
+    transform_diag[v_ind] = exp(rv);
+    transform_diag[(v_ind+1)%3] = exp(-rv);
+    transform_diag[(v_ind+2)%3] = 1.0;
+#ifdef DEBUG
+    std::cout << transform_diag[0] << " " << transform_diag[1] << " " << transform_diag[2] << " ";
+#endif
+    // create new cell for aspect ratio test and new domain
+    new_cell[0][0] = boxext[0] * transform_diag[0];
+    new_cell[0][1] = 0.0;
+    new_cell[0][2] = 0.0;
+    new_cell[1][0] = domain->xy * transform_diag[0];
+    new_cell[1][1] = boxext[1] * transform_diag[1];
+    new_cell[1][2] = 0.0;
+    new_cell[2][0] = domain->xz * transform_diag[0];
+    new_cell[2][1] = domain->yz * transform_diag[1];
+    new_cell[2][2] = boxext[2] * transform_diag[2];
+    if (cur_aspect_ratio(new_cell) < min_aspect_ratio) {
+      cell_move_rejected_early = true;
+#ifdef DEBUG
+      std::cout << "CELL REJECT min_aspect_ratio " << cur_aspect_ratio(new_cell) << std::endl;
+#endif
+    }
+  } else {
+    n_attempt_shear++;
+    cell_cur_move = MOVE_SHEAR;
+    // shear step
+    // save original cell and a temporary cell
+#ifdef DEBUG
+    std::cout << "CELL SHEAR ";
+#endif
+    double orig_cell[3][3], t_cell[3][3];
+    t_cell[0][0] = orig_cell[0][0] = boxext[0];
+    t_cell[0][1] = orig_cell[0][1] = 0.0;
+    t_cell[0][2] = orig_cell[0][2] = 0.0;
+    t_cell[1][0] = orig_cell[1][0] = domain->xy;
+    t_cell[1][1] = orig_cell[1][1] = boxext[1];
+    t_cell[1][2] = orig_cell[1][2] = 0.0;
+    t_cell[2][0] = orig_cell[2][0] = domain->xz;
+    t_cell[2][1] = orig_cell[2][1] = domain->yz;
+    t_cell[2][2] = orig_cell[2][2] = boxext[2];
+
+    // pick vector to perturb
+    int vec_ind = int(3 * random_g->uniform()) % 3;
+
+    // perturb t_cell[vec_ind] along other two vectors
+    double vhat[3];
+    for (int di=1; di < 3; di++) {
+      for (int i=0; i < 3; i++)
+        vhat[i] = orig_cell[(vec_ind + di) % 3][i];
+      MathExtra::norm3(vhat);
+      rv = random_g->gaussian(0.0, dShear);
+#ifdef DEBUG
+    std::cout << (vec_ind + di) % 3 << " " << rv << " ";
+#endif
+      for (int i=0; i < 3; i++)
+        t_cell[vec_ind][i] += rv * vhat[i];
+    }
+
+    if (cur_aspect_ratio(t_cell) < min_aspect_ratio) {
+      cell_move_rejected_early = true;
+#ifdef DEBUG
+      std::cout << "CELL REJECT min_aspect_ratio " << cur_aspect_ratio(t_cell) << std::endl;
+#endif
+    } else {
+      // rotate new_cell back to LAMMPS orientation
+
+      double a0_norm = sqrt(MathExtra::dot3(t_cell[0], t_cell[0]));
+      new_cell[0][0] = a0_norm;
+      new_cell[0][1] = 0.0;
+      new_cell[0][2] = 0.0;
+
+      double a0_hat[3] = {t_cell[0][0], t_cell[0][1], t_cell[0][2]}; MathExtra::norm3(a0_hat);
+      new_cell[1][0] = MathExtra::dot3(t_cell[1], a0_hat);
+      double a0_hat_cross_a1[3]; MathExtra::cross3(a0_hat, t_cell[1], a0_hat_cross_a1);
+      new_cell[1][1] = sqrt(MathExtra::dot3(a0_hat_cross_a1, a0_hat_cross_a1));
+      new_cell[1][2] = 0.0;
+
+      double a0_cross_a1_hat[3] = {a0_hat_cross_a1[0], a0_hat_cross_a1[1], a0_hat_cross_a1[2]};
+      MathExtra::norm3(a0_cross_a1_hat);
+
+      double a0_cross_a1_hat_cross_a0_hat[3];
+      MathExtra::cross3(a0_cross_a1_hat, a0_hat, a0_cross_a1_hat_cross_a0_hat);
+      new_cell[2][0] = MathExtra::dot3(t_cell[2], a0_hat);
+      new_cell[2][1] = MathExtra::dot3(t_cell[2], a0_cross_a1_hat_cross_a0_hat);
+      new_cell[2][2] = MathExtra::dot3(t_cell[2], a0_cross_a1_hat);
+    }
+  }
+
+  if (!cell_move_rejected_early) {
+    // apply move to box
+    double boxctr[3];
+    for (int i=0; i < 3; i++)
+      boxctr[i] = 0.5*(prev_boxhi[0] + prev_boxlo[0]);
+
+    domain->x2lamda(nlocal);
+
+    boxext[0] =  new_cell[0][0];
+    domain->xy = new_cell[1][0];
+    boxext[1] =  new_cell[1][1];
+    domain->xz = new_cell[2][0];
+    domain->yz = new_cell[2][1];
+    boxext[2] =  new_cell[2][2];
+
+    for (int i=0; i < 3; i++) {
+      domain->boxlo[i] = boxctr[i] - boxext[i]/2.0;
+      domain->boxhi[i] = boxctr[i] + boxext[i]/2.0;
+    }
+
+    domain->set_global_box();
+    domain->set_local_box();
+
+    domain->lamda2x(nlocal);
+#ifdef DEBUG
+    std::cout << std::endl;
+#endif
+  }
+
+}
+
+void FixNS::type_initial_integrate()
+{
+#ifdef DEBUG
+std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
+#endif
+  // do move (unless rejected)
+
+  n_attempt_type++;
+
+  int nlocal = atom->nlocal;
+  if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+  int ntypes = atom->ntypes;
+
+  int *type = atom->type;
+  for (int iat=0; iat < nlocal; iat++)
+      prevtype[iat] = type[iat];
+
+#ifdef SWAP_POS
+  double **x = atom->x;
+  for (int iat=0; iat < nlocal; iat++)
+      for (int jat=0; jat < 3; jat++)
+          prevx[iat][jat] = x[iat][jat];
+#endif
+
+  // WARNING move is restricted to only one proc - fine for semi-GC, but
+  // limiting for fixed composition swaps
+  double rv = random_g->uniform();
+  int rnd_proc = static_cast<int>(comm->nprocs * rv) % comm->nprocs;
+  if (comm->me != rnd_proc)
+    return;
+
+  rv = random_l->uniform();
+  int atom_0 = static_cast<int>(nlocal * rv) % nlocal;
+
+  if (semi_GC_flag) {
+    // perturb type randomly, store change to mu*N term
+    rv = random_l->uniform();
+    int dtype = 1 + static_cast<int>(rv * (ntypes-1)) % (ntypes-1);
+    int new_type = 1 + (((type[atom_0]-1) + dtype) % ntypes);
+    dmuN = mu[new_type-1] - mu[type[atom_0]-1];
+    type[atom_0] = new_type;
+#ifdef DEBUG
+    std::cout << "TYPE SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " <<
+                                                  type[atom_0] << " mu " << mu[type[atom_0]-1] << " " << std::endl;
+#endif
+  } else {
+    // not semi-GC, swap a pair of atoms
+    bool all_same = true;
+    for (int i=1; i < nlocal; i++)
+      if (type[0] != type[i]) {
+        all_same = false;
+        break;
+      }
+    if (all_same)
+      return;
+
+    int atom_1 = atom_0;
+    while (type[atom_0] == type[atom_1]) {
+        rv = random_l->uniform();
+        atom_1 = static_cast<int>(nlocal * rv) % nlocal;
+    }
+
+#ifdef DEBUG
+#ifdef SWAP_POS
+    std::cout << "TYPE SWAP i " << atom_0 << " type " << type[atom_0] << " x " << x[atom_0][0] << " " << x[atom_0][1] << " " << x[atom_0][2] << " <-> " <<
+                     " i " << atom_1 << " type " << type[atom_1] << " x " << x[atom_1][0] << " " << x[atom_1][1] << " " << x[atom_1][2] << " " << std::endl;
+#else
+    std::cout << "TYPE SWAP i " << atom_0 << " type " << type[atom_0] << " <-> i " << atom_1 << " type " << type[atom_1] << " " << std::endl;
+#endif
+#endif
+
+#ifdef SWAP_POS
+    double tx[3];
+    tx[0] = x[atom_0][0];
+    tx[1] = x[atom_0][1];
+    tx[2] = x[atom_0][2];
+    x[atom_0][0] = x[atom_1][0];
+    x[atom_0][1] = x[atom_1][1];
+    x[atom_0][2] = x[atom_1][2];
+    x[atom_1][0] = tx[0];
+    x[atom_1][1] = tx[1];
+    x[atom_1][2] = tx[2];
+#else
+    int t_type = type[atom_0];
+    type[atom_0] = type[atom_1];
+    type[atom_1] = t_type;
+#endif
+
+    dmuN = 0.0;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixNS::final_integrate()
+{
+  if (state_cur_move == MOVE_POS) {
+    pos_gmc_final_integrate();
+  } else if (state_cur_move == MOVE_CELL) {
+    cell_final_integrate();
+  } else if (state_cur_move == MOVE_TYPE) {
+    type_final_integrate();
+  }
+}
+
+void FixNS::pos_gmc_final_integrate()
+{
+  // if potential energy is above Emax then want to modify dx with
+  // forces to change trajectory
+
+  double **f = atom->f;
+  double **x = atom->x;
+  int *mask = atom->mask;
+  int nlocal = atom->nlocal;
+  if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+
+  double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
+#ifdef DEBUG
+std::cout << "POS ecurrent " << ecurrent << " + " << cumulative_dPV << " - " << cumulative_dmuN;
+#endif
+  ecurrent += cumulative_dPV - cumulative_dmuN;
+#ifdef DEBUG
+std::cout << " = " << ecurrent << std::endl;
+#endif
+
+  if (ecurrent < Emax) {
+#ifdef DEBUG
+std::cout << "POS ecurrent + dPV - dmuN = " << ecurrent << " < " << Emax << std::endl;
+#endif
+    // accept
+    if (state_traj_steps_remaining == 0) {
+#ifdef DEBUG
+std::cout << "POS ACCEPT end of traj, increment n_success_pos" << std::endl;
+#endif
+      // final step of mini traj, accept
+      n_success_pos += 1;
+    }
+#ifdef DEBUG
+std::cout << "POS mid traj, continuing" << std::endl;
+#endif
+    // accept new position and continue straight
+    return;
+  }
+
+#ifdef DEBUG
+std::cout << "POS ecurrent + dPV - dmuN = " << ecurrent << " >= " << Emax << std::endl;
+#endif
+
+  if (state_traj_steps_remaining == 0) {
+#ifdef DEBUG
+std::cout << "POS REJECT end of traj, revert positions to prevx" << std::endl;
+#endif
+    // final step of mini traj, reject
+    for (int i = 0; i < nlocal; i++) {
+      x[i][0] = prevx[i][0];
+      x[i][1] = prevx[i][1];
+      x[i][2] = prevx[i][2];
+    }
+    return;
+  }
+
+#ifdef DEBUG
+std::cout << "POS reflect" << std::endl;
+#endif
+
+  // try to reflect from boundary
+  double fsum = 0;
+  double fhatdotdx = 0;
+  for (int i = 0; i < nlocal; i++)
+      if (mask[i] & groupbit)
+        fsum += f[i][0]*f[i][0]+
+                f[i][1]*f[i][1]+
+                f[i][2]*f[i][2];
+  fsum = sqrt(fsum);
+
+  // should also detect nan
+  if (fsum != 0.0) {
+    for (int i = 0; i < nlocal; i++) {
+      if (mask[i] & groupbit) {
+            fhatdotdx += f[i][0]/fsum*dx[i][0];
+            fhatdotdx += f[i][1]/fsum*dx[i][1];
+            fhatdotdx += f[i][2]/fsum*dx[i][2];
+      }
+    }
+
+    for (int i = 0; i < nlocal; i++) {
+      if (mask[i] & groupbit) {
+            dx[i][0] -= 2*f[i][0]/fsum*fhatdotdx;
+            dx[i][1] -= 2*f[i][1]/fsum*fhatdotdx;
+            dx[i][2] -= 2*f[i][2]/fsum*fhatdotdx;
+      }
+    }
+  }
+
+}
+
+
+void FixNS::cell_final_integrate()
+{
+  // if potential energy is above Emax then reject move
+  double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
+#ifdef DEBUG
+std::cout << "CELL ecurrent " << ecurrent << " - " << cumulative_dmuN;
+#endif
+  ecurrent -= cumulative_dmuN;
+#ifdef DEBUG
+std::cout << " = " << ecurrent << std::endl;
+#endif
+
+  if (cell_move_rejected_early) {
+    return;
+  }
+
+  // if potential energy + d(P V) is above Emax then reject move
+  // need to include previous steps' cumulative dPV contributions, as well as current ones
+  if (ecurrent + cumulative_dPV + dPV >= Emax) {
+#ifdef DEBUG
+    std::cout << "CELL REJECT E == " << ecurrent << " + " << cumulative_dPV << " + " << dPV << " >= Emax == " << Emax << std::endl;
+#endif
+    // reject move, so don't touch cumulative_dPV, since type change that led to current dPV was reverted
+
+    for (int i=0; i < 3; i++) {
+      domain->boxlo[i] = prev_boxlo[i];
+      domain->boxhi[i] = prev_boxhi[i];
+    }
+    domain->xy = prev_xy;
+    domain->yz = prev_yz;
+    domain->xz = prev_xz;
+
+    domain->set_global_box();
+    domain->set_local_box();
+
+    double **x = atom->x;
+    int nlocal = atom->nlocal;
+    if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+    for (int iat=0; iat < nlocal; iat++)
+      for (int j=0; j < 3; j++)
+        x[iat][j] = prevx[iat][j];
+
+  } else {
+    // accept move, so accumulate dPV contribution from this step
+    cumulative_dPV += dPV;
+    switch (cell_cur_move) {
+        case MOVE_VOL:
+            n_success_vol++;
+            break;
+        case MOVE_STRETCH:
+            n_success_stretch++;
+            break;
+        case MOVE_SHEAR:
+            n_success_shear++;
+            break;
+        default:
+            error->all(FLERR,"Illegal value of cell_cur_move in increment n_success_*");
+    }
+#ifdef DEBUG
+double new_cell[3][3];
+new_cell[0][0] = domain->boxhi[0] - domain->boxlo[0];
+new_cell[0][1] = 0.0;
+new_cell[0][2] = 0.0;
+new_cell[1][0] = domain->xy;
+new_cell[1][1] = domain->boxhi[1] - domain->boxlo[1];
+new_cell[1][2] = 0.0;
+new_cell[2][0] = domain->xz;
+new_cell[2][1] = domain->yz;
+new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
+    std::cout << "CELL ACCEPT E == " << ecurrent << " + " << cumulative_dPV << " < Emax == " << Emax << " min_aspect " << cur_aspect_ratio(new_cell) << std::endl;
+    // std::cout << "final cell " << new_cell[0][0] << " " << new_cell[0][1] << " " << new_cell[0][2] << std::endl;
+    // std::cout << "           " << new_cell[1][0] << " " << new_cell[1][1] << " " << new_cell[1][2] << std::endl;
+    // std::cout << "           " << new_cell[2][0] << " " << new_cell[2][1] << " " << new_cell[2][2] << std::endl;
+#endif
+  }
+}
+
+
+void FixNS::type_final_integrate()
+{
+  double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
+#ifdef DEBUG
+std::cout << "TYPE ecurrent " << ecurrent << " + " << cumulative_dPV;
+#endif
+  ecurrent += cumulative_dPV;
+#ifdef DEBUG
+std::cout << " = " << ecurrent << std::endl;
+#endif
+
+  // if potential energy - d(mu N) is above Emax then reject move
+  // need to include previous steps' cumulative dmuN contributions, as well as current ones
+  if (ecurrent - cumulative_dmuN - dmuN >= Emax) {
+#ifdef DEBUG
+    std::cout << "TYPE REJECT E == " << ecurrent << " - " << cumulative_dmuN << " - " << dmuN << " >= Emax == " << Emax << " " << std::endl;
+#endif
+    // reject move, so don't touch cumulative_dmuN, since type change that led to current dmuN was reverted
+
+    int nlocal = atom->nlocal;
+    if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+    int *type = atom->type;
+// With SWAP_POS, type is only modified for semi-GC, so only has to be undone in that case, and x
+// has to be reverted to undo swap move.
+// By default (no SWAP_POS), type is modified for both swap and semi-GC, so undoing either step type
+// uses prevtype
+#ifdef SWAP_POS
+    if (semi_GC_flag) {
+#endif
+        for (int iat=0; iat < nlocal; iat++)
+            type[iat] = prevtype[iat];
+#ifdef SWAP_POS
+    } else {
+        double **x = atom->x;
+        for (int iat=0; iat < nlocal; iat++)
+            for (int jat=0; jat < 3; jat++)
+                x[iat][jat] = prevx[iat][jat];
+    }
+#endif
+
+    // modified type by restoring previous, communicate to ghost atoms
+    if (state_cur_move == MOVE_TYPE) {
+      comm->forward_comm(this);
+    }
+
+  } else {
+    // accept move, so accumulate dmuN contribution from this step
+    cumulative_dmuN += dmuN;
+    n_success_type++;
+#ifdef DEBUG
+    std::cout << "TYPE ACCEPT E == " << ecurrent << " - " << cumulative_dmuN << " < Emax == " << Emax << std::endl;
+#endif
+  }
+}
+
+FixNS::~FixNS()
+{
+  delete random_g;
+  delete random_l;
+
+  if (dx)
+    memory->destroy(dx);
+  if (prevx)
+    memory->destroy(prevx);
+  if (prevtype)
+    memory->destroy(prevtype);
+  if (mu)
+    delete mu;
+}
+
+double FixNS::cur_aspect_ratio(double cell[3][3])
+{
+  double min_val = std::numeric_limits<double>::max();
+  for (int i=0; i < 3; i++) {
+    double vnorm_hat[3];
+    MathExtra::cross3(cell[(i+1)%3], cell[(i+2)%3], vnorm_hat);
+    MathExtra::norm3(vnorm_hat);
+    double val = fabs(MathExtra::dot3(vnorm_hat, cell[i]));
+    min_val = (val < min_val) ? val : min_val;
+  }
+
+  double V;
+  if (domain->dimension == 3) V = domain->xprd * domain->yprd * domain->zprd;
+  else V = domain->xprd * domain->yprd;
+
+  return min_val / pow(V, 1.0/3.0);
+}
+
+double FixNS::compute_vector(int n)
+{
+  switch (n) {
+    case 0: return n_attempt_pos;
+    case 1: return n_success_pos;
+    case 2: return n_attempt_vol;
+    case 3: return n_success_vol;
+    case 4: return n_attempt_stretch;
+    case 5: return n_success_stretch;
+    case 6: return n_attempt_shear;
+    case 7: return n_success_shear;
+    case 8: return n_attempt_type;
+    case 9: return n_success_type;
+  }
+  return -1.0;
+}

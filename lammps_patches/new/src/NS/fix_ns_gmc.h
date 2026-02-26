@@ -27,11 +27,11 @@ namespace LAMMPS_NS {
 class FixNSGMC : public Fix {
  public:
   FixNSGMC(class LAMMPS *, int, char **);
-  ~FixNSGMC();
-  int setmask();
-  virtual void init();
-  virtual void initial_integrate(int);
-  virtual void final_integrate();
+  ~FixNSGMC() override;
+  int setmask() override;
+  void init() override;
+  void initial_integrate(int) override;
+  void final_integrate() override;
 
  protected:
   class Compute *pe_compute;
@@ -42,7 +42,6 @@ class FixNSGMC : public Fix {
   double step_size;
   int peflag;
   char *id_pe;
-  char str[64];
 };
 
 }

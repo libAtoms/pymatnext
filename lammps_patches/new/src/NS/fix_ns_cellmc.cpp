@@ -364,6 +364,9 @@ void FixNSCellMC::final_integrate()
 {
   // if potential energy is above Emax then reject move
   double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
+#ifdef DEBUG
+std::cout << "CELL ecurrent " << ecurrent << std::endl;
+#endif
 
   if (move_rejected_early) {
     return;
@@ -373,7 +376,7 @@ void FixNSCellMC::final_integrate()
   // need to include previous steps' cumulative dPV contributions, as well as current ones
   if (ecurrent + cumulative_dPV + dPV >= Emax) {
 #ifdef DEBUG
-    std::cout << "REJECT E == " << ecurrent << " + " << cumulative_dPV + dPV << " >= Emax == " << Emax << std::endl;
+    std::cout << "REJECT E == " << ecurrent << " + " << cumulative_dPV << " + " << dPV << " >= Emax == " << Emax << std::endl;
 #endif
     // reject move, so don't touch cumulative_dPV, since type change that led to current dPV was reverted
 
@@ -421,7 +424,7 @@ new_cell[1][2] = 0.0;
 new_cell[2][0] = domain->xz;
 new_cell[2][1] = domain->yz;
 new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
-    std::cout << "ACCEPT E == " << ecurrent " + " << cumulative_dPV << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
+    std::cout << "ACCEPT E == " << ecurrent << " + " << cumulative_dPV << " < Emax == " << Emax << " min_aspect " << min_aspect_ratio_val(new_cell) << std::endl;
     // std::cout << "final cell " << new_cell[0][0] << " " << new_cell[0][1] << " " << new_cell[0][2] << std::endl;
     // std::cout << "           " << new_cell[1][0] << " " << new_cell[1][1] << " " << new_cell[1][2] << std::endl;
     // std::cout << "           " << new_cell[2][0] << " " << new_cell[2][1] << " " << new_cell[2][2] << std::endl;

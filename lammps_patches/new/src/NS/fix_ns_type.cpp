@@ -98,6 +98,13 @@ FixNSType::FixNSType(LAMMPS *lmp, int narg, char **arg) :
 
   force_reneighbor = 1;
   next_reneighbor = update->ntimestep + 1;
+  //
+  // from MC/fix_atom_swap.cpp
+  // amount of data to be packed for inter-process comm (atom type)
+  if (atom->q_flag) 
+    comm_forward = 2;
+  else
+    comm_forward = 1;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -112,6 +119,53 @@ int FixNSType::setmask()
   mask |= INITIAL_INTEGRATE_RESPA;
   mask |= FINAL_INTEGRATE_RESPA;
   return mask;
+}
+
+// from MC/fix_atom_swap.cpp
+int FixNSType::pack_forward_comm(int n, int *list, double *buf, int /*pbc_flag*/, int * /*pbc*/)
+{
+  int i, j, m;
+
+  int *type = atom->type;
+  double *q = atom->q;
+
+  m = 0;
+
+  if (atom->q_flag) {
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      buf[m++] = type[j];
+      buf[m++] = q[j];
+    }
+  } else {
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      buf[m++] = type[j];
+    }
+  }
+
+  return m;
+}
+
+// from MC/fix_atom_swap.cpp
+void FixNSType::unpack_forward_comm(int n, int first, double *buf)
+{
+  int i, m, last;
+
+  int *type = atom->type;
+  double *q = atom->q;
+
+  m = 0;
+  last = first + n;
+
+  if (atom->q_flag) {
+    for (i = first; i < last; i++) {
+      type[i] = static_cast<int>(buf[m++]);
+      q[i] = buf[m++];
+    }
+  } else {
+    for (i = first; i < last; i++) type[i] = static_cast<int>(buf[m++]);
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -198,8 +252,8 @@ void FixNSType::initial_integrate(int vflag)
     dmuN = mu[new_type-1] - mu[type[atom_0]-1];
     type[atom_0] = new_type;
 #ifdef DEBUG
-    std::cout << "SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " <<
-                                                  type[atom_0] << " mu " << mu[type[atom_0]-1] << " ";
+    std::cout << "TYPE SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " <<
+                                                  type[atom_0] << " mu " << mu[type[atom_0]-1] << std::endl;
 #endif
   } else {
     bool all_same = true;
@@ -219,7 +273,7 @@ void FixNSType::initial_integrate(int vflag)
 
 #ifdef DEBUG
 #ifdef SWAP_POS
-    std::cout << "SWAP i " << atom_0 << " type " << type[atom_0] << " x " << x[atom_0][0] << " " << x[atom_0][1] << " " << x[atom_0][2] << " <-> " <<
+    std::cout << "TYPE SWAP i " << atom_0 << " type " << type[atom_0] << " x " << x[atom_0][0] << " " << x[atom_0][1] << " " << x[atom_0][2] << " <-> " <<
                      " i " << atom_1 << " type " << type[atom_1] << " x " << x[atom_1][0] << " " << x[atom_1][1] << " " << x[atom_1][2] << " ";
 #else
     std::cout << "SWAP i " << atom_0 << " type " << type[atom_0] << " <-> i " << atom_1 << " type " << type[atom_1] << " ";
@@ -246,6 +300,9 @@ void FixNSType::initial_integrate(int vflag)
     dmuN = 0.0;
   }
 
+  // communicate modified types to ghost atoms
+  comm->forward_comm(this);
+
   // copied from fix_gmc.cpp
   // not sure if it's needed on rejections
   int id = modify->find_compute("thermo_pe");
@@ -260,6 +317,9 @@ void FixNSType::initial_integrate(int vflag)
 void FixNSType::final_integrate()
 {
   double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
+#ifdef DEBUG
+std::cout << "TYPE ecurrent " << ecurrent << std::endl;
+#endif
 
   // if potential energy + d(mu N) is above Emax then reject move
   // need to include previous steps' cumulative dmuN contributions, as well as current ones
@@ -288,6 +348,9 @@ void FixNSType::final_integrate()
                 x[iat][jat] = prevx[iat][jat];
     }
 #endif
+
+    // communicate restored prev types to ghost atoms
+    comm->forward_comm(this);
 
     // NOTE: no idea if this is necessary, or the right place to do this after rejecting a move
     // I suspect it's not necessary at all, since next step all these things will be done anyway
