@@ -11,6 +11,10 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
+#ifdef DEBUG
+#include <iostream>
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include "fix_ns_gmc.h"
@@ -150,10 +154,17 @@ void FixNSGMC::final_integrate()
   int nlocal = atom->nlocal;
 
   double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
+#ifdef DEBUG
+std::cout << "POS ecurrent " << ecurrent << std::endl;
+#endif
 
   if (ecurrent < Emax)
     // continue straight
     return;
+
+#ifdef DEBUG
+std::cout << "POS " << ecurrent << " >= " << Emax << " reflect" << std::endl;
+#endif
 
   // try to reflect from boundary
   double fsum = 0;

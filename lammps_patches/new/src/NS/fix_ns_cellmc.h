@@ -27,12 +27,12 @@ namespace LAMMPS_NS {
 class FixNSCellMC : public Fix {
  public:
   FixNSCellMC(class LAMMPS *, int, char **);
-  ~FixNSCellMC();
-  int setmask();
-  virtual void init();
-  virtual void initial_integrate(int);
-  virtual void final_integrate();
-  double compute_vector(int);
+  ~FixNSCellMC() override;
+  int setmask() override;
+  void init() override;
+  void initial_integrate(int) override;
+  void final_integrate() override;
+  double compute_vector(int) override;
 
  protected:
   class Compute *pe_compute;
@@ -46,7 +46,6 @@ class FixNSCellMC : public Fix {
   double pVol, dVol, pStretch, dStretch, pShear, dShear;
   int peflag;
   char *id_pe;
-  char str[64];
 
   double dPV, cumulative_dPV;
 

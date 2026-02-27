@@ -455,16 +455,23 @@ class NSConfig_ASE_Atoms():
         self.walk_func = {}
         if self.calc_type == "ASE":
             from .walks_ase_calc import walk_pos_gmc, walk_cell, walk_type
+            walk_combined = None
         elif self.calc_type == "LAMMPS":
-            from .walks_lammps import walk_pos_gmc, walk_cell, walk_type
+            from .walks_lammps import walk_pos_gmc, walk_cell, walk_type, walk_combined
         else:
             raise NotImplementedError(f"Unknown calculator type {self.calc_type}")
 
-        self.walk_func["gmc"] = walk_pos_gmc
-        self.walk_func["cell"] = walk_cell
-        self.walk_func["type"] = walk_type
+        if params["combined"]:
+            if not walk_combined:
+                raise RuntimeError(f"Got walk_combined but no walk_combined function for calc_type {self.calc_type}")
+            self.walk_func["combined"] = walk_combined
+        else:
+            self.walk_func["gmc"] = walk_pos_gmc
+            self.walk_func["cell"] = walk_cell
+            self.walk_func["type"] = walk_type
 
-        assert set(self.walk_func.keys()) == set(NSConfig_ASE_Atoms._walk_moves)
+            # make sure all moves are valid
+            assert set(self.walk_func.keys()) == set(NSConfig_ASE_Atoms._walk_moves)
 
         if self.walk_prob[NSConfig_ASE_Atoms._walk_moves.index("gmc")] > 0.0:
             self.atoms.new_array("NS_velocities", np.zeros(self.atoms.positions.shape))
@@ -713,19 +720,27 @@ class NSConfig_ASE_Atoms():
         dict(str param_name: ndarray([int n_attempts, int n_success])) dict containing number of attempted moves
         and number of successful moves for each move type
         """
-        # if we fixed the number of steps for every move type, and only varied proportions,
-        # we could do all the rng in a single call
         self.atoms.calc = self.calc
-        walk_len_so_far = 0
-        while walk_len_so_far < walk_len:
-            move = rng.choice(NSConfig_ASE_Atoms._walk_moves, p=self.walk_prob)
 
+        if self.walk_func.get("combined"):
             # returns list of tuples with move param attempt/success statistics
-            n_att_acc_walk = self.walk_func[move](self, Emax, rng)
+            n_att_acc_walk = self.walk_func["combined"](self, Emax, rng, walk_len)
             for param, n_att, n_acc in n_att_acc_walk:
                 self.n_att_acc[param] += (n_att, n_acc)
+        else:
+            walk_len_so_far = 0
+            while walk_len_so_far < walk_len:
+                # if we fixed the number of steps for every move type, and only varied proportions,
+                # we could do all the rng move selection in a single call, because the number of moves
+                # we need would be known ahead of time
+                move = rng.choice(NSConfig_ASE_Atoms._walk_moves, p=self.walk_prob)
 
-            walk_len_so_far += self.walk_traj_len[move]
+                # returns list of tuples with move param attempt/success statistics
+                n_att_acc_walk = self.walk_func[move](self, Emax, rng)
+                for param, n_att, n_acc in n_att_acc_walk:
+                    self.n_att_acc[param] += (n_att, n_acc)
+
+                walk_len_so_far += self.walk_traj_len[move]
 
         # move walks keep track of NS_energy_shift by accumulating changes.  It would definitely
         # be more stable to recalculate shift from scratch, although there's a chance it might lead to

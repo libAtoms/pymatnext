@@ -111,5 +111,6 @@ and whatever other options are needed).  Installing the python package is most e
 
 ## Done
 
+ - combine all move types into a single LAMMPS fix, for improved performance
  - restart from snapshots
  - refactor `NSConfig.n_quantities` to be a class rather than instance attribute (minor)
