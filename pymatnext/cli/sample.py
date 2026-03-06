@@ -273,7 +273,7 @@ def sample(args, MPI, NS_comm, walker_comm):
 
         if clone_history_file:
             clone_history_file.write(f"{loop_iter} {global_ind_of_clone_source} {global_ind_of_max}\n")
-            if loop_iter % 1000 == 1000 - 1:
+            if loop_iter % 100 == 100 - 1:
                 clone_history_file.flush()
 
         # write max to traj file
@@ -333,6 +333,8 @@ def sample(args, MPI, NS_comm, walker_comm):
         # except it would require an additional communication so all processes agree that it's time for a snapshot
         if loop_iter > 0 and snapshot_interval > 0 and loop_iter % snapshot_interval == 0:
             ns.snapshot(loop_iter, output_filename_prefix, save_old=snapshot_save_old)
+            if clone_history_file:
+                clone_history_file.flush()
 
         loop_iter += 1
 
