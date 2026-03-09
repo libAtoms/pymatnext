@@ -35,5 +35,5 @@ class ExitLoop():
         log_config_vol = loop_iter * self.log_a + self.log_1_minus_a
         log_cur_Z_term = log_config_vol - self.beta * NS_quant
         self.log_Z_term_max = max(self.log_Z_term_max, log_cur_Z_term)
-        # if this term contributed less that exp(-10) of max contribution, then Z(T) is converged and we can exit
-        return log_cur_Z_term < self.log_Z_term_max - 10.0
+        # if this term contributed less that exp(-100) of max contribution, then Z(T) is converged and we can exit
+        return log_cur_Z_term < self.log_Z_term_max - 100.0
