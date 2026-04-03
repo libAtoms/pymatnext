@@ -273,7 +273,11 @@ def sample(args, MPI, NS_comm, walker_comm):
 
         if clone_history_file:
             clone_history_file.write(f"{loop_iter} {global_ind_of_clone_source} {global_ind_of_max}\n")
-            if loop_iter % 100 == 100 - 1:
+            if ((sample_interval > 0 and loop_iter % sample_interval == 0) or
+                (traj_interval > 0 and loop_iter % traj_interval == 0) or
+                (snapshot_interval > 0 and loop_iter % snapshot_interval == 0)):
+                # always flush if another file is being written, so enough records are
+                # available for analysis or restart
                 clone_history_file.flush()
 
         # write max to traj file
