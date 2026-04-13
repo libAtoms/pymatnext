@@ -53,6 +53,7 @@ def main():
                        """'analysis(atoms, arg, arg ...)', followed by JSON string defining args or kwargs (not both). """
                        f"""Predefined modules (in pymatnext.analysis.tools): {analysis_modules}""", required=True)
     p.add_argument('--plot', '-p', action='store_true', help="""quick and dirty plot of analysis results""")
+    p.add_argument('--plot_scalar_vs_T', action='store_true', help="""quick and dirty plot of analysis results if a scalar, vs. T""")
 
     p.add_argument('--kB', '-k',  help="""Boltzmann constant (defaults to eV/K)""", type=float, default=8.6173324e-5)
     p.add_argument('--accurate_sum', action='store_true', help="""use more accurate sum (math.fsum)""")
@@ -64,10 +65,16 @@ def main():
     p.add_argument('--ns_iter_field', help="""info field for NS iter #""", default="NS_iter")
     p.add_argument('--ns_E_field', help="""info field for NS energy/enthalpy""")
 
-    p.add_argument('--output', '-o', help="""filename base for values and figures of each analysis""", required=True)
+    p.add_argument('--output', '-o', help="""filename base for values and figures of each analysis, default to trajfile""")
     p.add_argument('trajfile', nargs='+', help="""input trajectory files""")
 
     args = p.parse_args()
+
+    if args.output is None:
+        if len(args.trajfile) == 1:
+            args.output = args.trajfile[0]
+        else:
+            raise RuntimeError("--output default only works when there is one trajfile")
 
     if args.samples_file is None:
         if args.walkers is None or args.cull is None:
@@ -249,6 +256,20 @@ def main():
             ax[a_name].set_xlabel(axis_labels[0])
             ax[a_name].set_ylabel(axis_labels[1])
 
+    if args.plot_scalar_vs_T:
+        fig_scalar = Figure()
+        ax_scalar = {}
+        data_scalar = {}
+        a = args.analysis[0]
+        ax_scalar[a] = fig_scalar.add_subplot()
+        ax_scalar[a].set_xlabel("T")
+        ax_scalar[a].set_ylabel(a)
+        data_scalar[a] = []
+        for a in args.analysis[1:]:
+            ax_scalar[a] = ax_scalar[args.analysis[0]].twinx()
+            ax_scalar[a].set_ylabel(a)
+            data_scalar[a] = []
+
     linetypes = ['-', '--', '-.']
     outfiles = {}
     for analysis in args.analysis:
@@ -263,6 +284,10 @@ def main():
             outfiles[analysis].write('\n\n')
             if args.plot:
                 ax[analysis].plot(res[0], res[1], linetypes[T_i // 10], color=f'C{T_i}', label=f'T = {T} K')
+            if args.plot_scalar_vs_T:
+                if res.shape != (1, 1):
+                    raise RuntimeError(f"--plot_scalar_vs_T with a non-scalar analysis, shape {res.shape}")
+                data_scalar[analysis].append(res[0][0])
     for outfile in outfiles.values():
         outfile.close()
 
@@ -270,6 +295,10 @@ def main():
         for fig_name, fig_obj in fig.items():
             fig_obj.legend()
             fig_obj.savefig(args.output + '.' + fig_name + '.pdf', bbox_inches='tight')
+    if args.plot_scalar_vs_T:
+        for analysis, ax in ax_scalar.items():
+            ax.plot(args.temperature, data_scalar[analysis], "-", label=analysis)
+        fig_scalar.savefig(args.output + '.scalar_analyses.pdf', bbox_inches='tight')
 
 
 if __name__ == "__main__":

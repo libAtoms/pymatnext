@@ -308,7 +308,8 @@ def main():
 
         extensive_fields = ['log_Z', 'FG', 'U', 'Cvp', 'S', 'V', 'thermal_exp']
         if comm_rank == 0:
-            print("# ", infile, "n_walkers", n_walkers, "n_cull", n_cull if isinstance(n_cull, int) else "VARIABLE")
+            outfile = open(infile + '.analysis', 'w')
+            outfile.write(f"# {infile} n_walkers {n_walkers} n_cull {(n_cull if isinstance(n_cull, int) else 'VARIABLE')}\n")
 
             header_format = '# ' + T_format_s  + ' ' + ' '.join([str_format(formats.get(k, default_format)[1]) for k in item_keys])
             line_format =          T_format[1] + ' ' + ' '.join([formats.get(k, default_format)[1] for k in item_keys])
@@ -318,8 +319,8 @@ def main():
                 for k in args.plot:
                     plot_data[colname(k)] = []
 
-            print('#', json.dumps(item_keys))
-            print(header_format.format(*(['T'] + [header_col(k) for k in item_keys])))
+            outfile.write('# ' + json.dumps(item_keys) + '\n')
+            outfile.write(header_format.format(*(['T'] + [header_col(k) for k in item_keys])) + '\n')
             data = sorted(data, key = lambda x: x[0])
             for row in data:
                 if extensive_N is not None:
@@ -327,7 +328,7 @@ def main():
                     for field_i in range(len(row)):
                         if item_keys[field_i-1] in extensive_fields:
                             row[field_i] /= extensive_N
-                print(line_format.format(*row))
+                outfile.write(line_format.format(*row) + '\n')
                 if args.plot:
                     plot_data['T'].append(row[0])
                     col_i = item_keys.index('problem') + 1
@@ -344,8 +345,8 @@ def main():
                 for k in plot_data:
                     plot_data[k] = np.asarray(plot_data[k])
 
-            print('')
-            print('')
+            # print('')
+            # print('')
 
             if args.plot:
                 if not args.plot_together:
