@@ -60,7 +60,7 @@ def main():
     p.add_argument('--quiet', '-q', action='store_true', help="""No progress output""")
     p.add_argument('--no_cache', dest='cache', action='store_false', help="""do not read or write analysis results to cache files""")
 
-    p.add_argument('--ns_iters', '-i',  help="""range expression for iterations to use""")
+    p.add_argument('--ns_iters', '-i',  help="""range expression for iterations to use""", default=":")
     p.add_argument('--ns_iter_field', help="""info field for NS iter #""", default="NS_iter")
     p.add_argument('--ns_E_field', help="""info field for NS energy/enthalpy""")
 
@@ -206,7 +206,7 @@ def main():
         for analysis_i, analysis_f in enumerate(analysis_funcs):
             if analysis_i in found_cached:
                 continue
-            v = analysis_f[0](at, *analysis_f[1], **analysis_f[2])
+            v = np.asarray(analysis_f[0](at, *analysis_f[1], **analysis_f[2]))
             extra_vals[analysis_i].append(v.tolist())
     iters = np.asarray(iters)
     Es = np.asarray(Es)
@@ -228,7 +228,7 @@ def main():
 
     if args.samples_file is not None:
         with open(args.samples_file) as fin:
-            header = json.loads(fin.readline())
+            header = json.loads(fin.readline()[1:])
         args.walkers = header['n_walkers']
         args.cull = header['n_cull']
         args.flat_V_prior = header['flat_V_prior']
