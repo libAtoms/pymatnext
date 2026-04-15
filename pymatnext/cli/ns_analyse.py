@@ -294,7 +294,7 @@ def main():
                    'Cvp' : ('Cv or Cp', '{:11g}'),
                    'S' : ('S', '{:11g}'),
                    'low_percentile_config' : ('low % i', '{:10d}'),
-                   'mode_config' : ('mode i', '{:10d}'),
+                   'median_config' : ('median i', '{:10d}'),
                    'high_percentile_config' : ('high % i', '{:10d}'),
                    'p_entropy' : ('ent(p)', '{:6.3f}'),
                    'V' : ('V', '{:8g}'),

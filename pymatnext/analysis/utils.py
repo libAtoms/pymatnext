@@ -177,8 +177,6 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     # also add the E_shift
     Helmholtz_F = -log_Z / beta + U_extra_DOF + E_shift
 
-    mode_config = np.argmax(Z_term)
-
     results_dict = {'log_Z': log_Z,
                     'FG': Helmholtz_F,
                     'U': U,
@@ -193,24 +191,31 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
 
     # compute range of configs that contributes significantly to sum
     Z_term_cumsum = np.cumsum(Z_term)
-    low_inds = np.where(Z_term_cumsum < 0.01 * Z_term_sum)[0]
-    if len(low_inds) == 0:
-        low_percentile_config = 0
-    else:
-        low_percentile_config = low_inds[-1]
-    high_inds = np.where(Z_term_cumsum > 0.99 * Z_term_sum)[0]
-    if len(high_inds) > 0:
-        high_percentile_config = high_inds[0] + 1
-        high_percentile_config = min(high_percentile_config, len(Z_term) - 1)
-    else:
-        high_percentile_config = len(Z_term) - 1
+
+    def find_frac(term_cumsum, frac):
+        term_sum = term_cumsum[-1]
+        last_under = np.where(term_cumsum < frac * term_sum)[0]
+        if len(last_under) == 0:
+            last_under = 0
+        else:
+            last_under = last_under[-1]
+        first_over = np.where(term_cumsum >= frac * term_sum)[0]
+        if len(first_over) == 0:
+            first_over = len(term_cumsum) - 1
+        else:
+            first_over = first_over[0]
+        return np.round((first_over + last_under) / 2.0).astype(int)
+
+    median_config = find_frac(Z_term_cumsum, 0.5)
+    low_percentile_config = find_frac(Z_term_cumsum, 0.01)
+    high_percentile_config = find_frac(Z_term_cumsum, 0.99)
 
     probabilities = Z_term / Z_term_sum
     probabilities = probabilities[np.where(probabilities > 0.0)]
     p_entropy = -sum_f(probabilities * np.log(probabilities))
 
     results_dict.update({'low_percentile_config': low_percentile_config,
-                         'mode_config': mode_config,
+                         'median_config': median_config,
                          'high_percentile_config': high_percentile_config,
                          'p_entropy': p_entropy})
 
