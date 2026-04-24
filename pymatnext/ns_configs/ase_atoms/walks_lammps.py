@@ -1,3 +1,4 @@
+import numpy as np
 import warnings
 
 import lammps
@@ -142,12 +143,14 @@ def walk_combined(ns_atoms, Emax, rng, walk_len):
     lammps_seed = rng.integers(1, 900000000)
 
     set_lammps_from_atoms(ns_atoms)
+    E, _ = extract_E_F(ns_atoms.calc, True)
 
-    Emax -= atoms.info["NS_energy_shift"]
+    Emax_PE = Emax - atoms.info["NS_energy_shift"]
     pPos = ns_atoms.walk_prob[ns_atoms._walk_moves.index("gmc")]
     pCell = ns_atoms.walk_prob[ns_atoms._walk_moves.index("cell")]
     pType = ns_atoms.walk_prob[ns_atoms._walk_moves.index("type")]
-    fix_cmd = f"fix NS all ns {lammps_seed} {Emax} {pPos} {pCell} {pType}"
+    fix_cmd = f"fix NS all ns {lammps_seed} {Emax_PE} {pPos} {pCell} {pType}"
+
 
     if pPos > 0.0:
         fix_cmd += f" {ns_atoms.walk_traj_len['gmc']} {ns_atoms.step_size['pos_gmc_each_atom']}"
@@ -225,7 +228,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
     ns_atoms: NSConfig_ASE_Atoms
         atomic configuration
     Emax: float
-        maximm shifted energy
+        maximum shifted energy
     rng: np.Generator
         random number generator
 
@@ -276,7 +279,7 @@ def walk_cell(ns_atoms, Emax, rng):
     ns_atoms: NSConfig_ASE_Atoms
         atomic configuration
     Emax: float
-        maximm shifted energy
+        maximum shifted energy
     rng: np.Generator
         random number generator
 
@@ -364,7 +367,7 @@ def walk_type(ns_atoms, Emax, rng):
     ns_atoms: NSConfig_ASE_Atoms
         atomic configuration
     Emax: float
-        maximm shifted energy
+        maximum shifted energy
     rng: np.Generator
         random number generator
 

@@ -750,6 +750,12 @@ class NSConfig_ASE_Atoms():
         #   # make sure shifted energy <= Emax (is this enough, or do we need strictly <, and if so, how do we achieve that ?)
         #   self.atoms.info["NS_quantities"][0] = min(Emax, self.atoms.info["NS_energy"] + self.atoms.info["NS_energy_shift"])
 
+        # make sure walk didn't fail to obey Emax
+        assert self.atoms.info["NS_energy"] + self.atoms.info["NS_energy_shift"] < Emax + 1.0e-10, (
+                 f"Walk resulted in final enthalpy {self.atoms.info['NS_energy']} + "
+                 f"{self.atoms.info['NS_energy_shift']} > Emax {Emax}"
+               )
+
         return self.n_att_acc
 
 
