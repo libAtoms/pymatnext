@@ -657,6 +657,9 @@ std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->
   for (int iat=0; iat < nlocal; iat++)
       prevtype[iat] = type[iat];
 
+  // initialize in case step returns early
+  dmuN = 0.0;
+
 #ifdef SWAP_POS
   double **x = atom->x;
   for (int iat=0; iat < nlocal; iat++)
@@ -727,8 +730,6 @@ std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->
     type[atom_0] = type[atom_1];
     type[atom_1] = t_type;
 #endif
-
-    dmuN = 0.0;
   }
 }
 

@@ -1,6 +1,6 @@
 diff -N -u -r orig/cmake/CMakeLists.txt new/cmake/CMakeLists.txt
---- orig/cmake/CMakeLists.txt	2026-02-26 14:57:37.917018563 -0500
-+++ new/cmake/CMakeLists.txt	2026-02-26 14:57:37.959018179 -0500
+--- orig/cmake/CMakeLists.txt	2026-04-24 12:15:40.254349593 -0400
++++ new/cmake/CMakeLists.txt	2026-04-24 12:15:40.316348958 -0400
 @@ -350,7 +350,8 @@
    UEF
    VORONOI
@@ -13,7 +13,7 @@ diff -N -u -r orig/cmake/CMakeLists.txt new/cmake/CMakeLists.txt
  
 diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 --- orig/src/NS/fix_ns_cellmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.cpp	2026-02-26 14:56:30.259636770 -0500
++++ new/src/NS/fix_ns_cellmc.cpp	2026-03-06 16:18:25.411936752 -0500
 @@ -0,0 +1,477 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -494,7 +494,7 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.cpp new/src/NS/fix_ns_cellmc.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 --- orig/src/NS/fix_ns_cellmc.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_cellmc.h	2026-02-26 14:56:30.259636770 -0500
++++ new/src/NS/fix_ns_cellmc.h	2026-03-06 16:18:25.427936607 -0500
 @@ -0,0 +1,73 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -571,8 +571,8 @@ diff -N -u -r orig/src/NS/fix_ns_cellmc.h new/src/NS/fix_ns_cellmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns.cpp new/src/NS/fix_ns.cpp
 --- orig/src/NS/fix_ns.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns.cpp	2026-02-26 14:56:30.260636761 -0500
-@@ -0,0 +1,1021 @@
++++ new/src/NS/fix_ns.cpp	2026-04-24 12:15:08.898670305 -0400
+@@ -0,0 +1,1022 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
 +   http://lammps.sandia.gov, Sandia National Laboratories
@@ -1232,6 +1232,9 @@ diff -N -u -r orig/src/NS/fix_ns.cpp new/src/NS/fix_ns.cpp
 +  for (int iat=0; iat < nlocal; iat++)
 +      prevtype[iat] = type[iat];
 +
++  // initialize in case step returns early
++  dmuN = 0.0;
++
 +#ifdef SWAP_POS
 +  double **x = atom->x;
 +  for (int iat=0; iat < nlocal; iat++)
@@ -1302,8 +1305,6 @@ diff -N -u -r orig/src/NS/fix_ns.cpp new/src/NS/fix_ns.cpp
 +    type[atom_0] = type[atom_1];
 +    type[atom_1] = t_type;
 +#endif
-+
-+    dmuN = 0.0;
 +  }
 +}
 +
@@ -1596,7 +1597,7 @@ diff -N -u -r orig/src/NS/fix_ns.cpp new/src/NS/fix_ns.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_gmc.cpp new/src/NS/fix_ns_gmc.cpp
 --- orig/src/NS/fix_ns_gmc.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_gmc.cpp	2026-02-26 14:56:30.260636761 -0500
++++ new/src/NS/fix_ns_gmc.cpp	2026-03-06 16:18:25.428936597 -0500
 @@ -0,0 +1,212 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -1812,7 +1813,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.cpp new/src/NS/fix_ns_gmc.cpp
 +
 diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 --- orig/src/NS/fix_ns_gmc.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_gmc.h	2026-02-26 14:56:30.261636752 -0500
++++ new/src/NS/fix_ns_gmc.h	2026-03-06 16:18:25.428936597 -0500
 @@ -0,0 +1,60 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -1876,7 +1877,7 @@ diff -N -u -r orig/src/NS/fix_ns_gmc.h new/src/NS/fix_ns_gmc.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns.h new/src/NS/fix_ns.h
 --- orig/src/NS/fix_ns.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns.h	2026-02-26 14:56:30.261636752 -0500
++++ new/src/NS/fix_ns.h	2026-03-06 16:18:25.410936762 -0500
 @@ -0,0 +1,106 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -1986,7 +1987,7 @@ diff -N -u -r orig/src/NS/fix_ns.h new/src/NS/fix_ns.h
 +*/
 diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 --- orig/src/NS/fix_ns_type.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.cpp	2026-02-26 14:56:30.262636743 -0500
++++ new/src/NS/fix_ns_type.cpp	2026-03-06 16:18:25.429936588 -0500
 @@ -0,0 +1,404 @@
 +/* ----------------------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -2394,7 +2395,7 @@ diff -N -u -r orig/src/NS/fix_ns_type.cpp new/src/NS/fix_ns_type.cpp
 +}
 diff -N -u -r orig/src/NS/fix_ns_type.h new/src/NS/fix_ns_type.h
 --- orig/src/NS/fix_ns_type.h	1969-12-31 19:00:00.000000000 -0500
-+++ new/src/NS/fix_ns_type.h	2026-02-26 14:56:30.262636743 -0500
++++ new/src/NS/fix_ns_type.h	2026-03-06 16:18:25.430936579 -0500
 @@ -0,0 +1,71 @@
 +/* -*- c++ -*- ----------------------------------------------------------
 +   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
