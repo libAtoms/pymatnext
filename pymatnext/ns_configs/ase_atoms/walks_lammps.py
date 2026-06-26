@@ -136,7 +136,7 @@ def extract_E_F(lmp, recalc):
     return (lmp.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR),
             lmp.numpy.extract_atom("f")[:nlocal])
 
-def walk_combined(ns_atoms, Emax, rng, walk_len):
+def walk_combined(ns_atoms, Emax, rng, walk_len, traj_info=None):
     ns_atoms.calc.command("unfix NS")
     atoms = ns_atoms.atoms
     # for LAMMPS RanMars RNG
@@ -150,7 +150,6 @@ def walk_combined(ns_atoms, Emax, rng, walk_len):
     pCell = ns_atoms.walk_prob[ns_atoms._walk_moves.index("cell")]
     pType = ns_atoms.walk_prob[ns_atoms._walk_moves.index("type")]
     fix_cmd = f"fix NS all ns {lammps_seed} {Emax_PE} {pPos} {pCell} {pType}"
-
 
     if pPos > 0.0:
         fix_cmd += f" {ns_atoms.walk_traj_len['gmc']} {ns_atoms.step_size['pos_gmc_each_atom']}"
@@ -178,6 +177,14 @@ def walk_combined(ns_atoms, Emax, rng, walk_len):
             fix_cmd += " no"
 
     ns_atoms.calc.command(fix_cmd)
+
+    if ns_atoms.calc._dump_ns_traj:
+        ns_atoms.calc.command("undump NS_traj")
+    if traj_info is not None:
+        traj_cmd = f"dump NS_traj all custom {traj_info['interval']} {traj_info['label']}.lammps-dump id type x y z c_peatom"
+        ns_atoms.calc.command(traj_cmd)
+        ns_atoms.calc._dump_ns_traj = True
+
     try:
         ns_atoms.calc.command(f"run {walk_len} post no")
         failed = False

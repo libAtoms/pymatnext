@@ -173,7 +173,7 @@ class NS:
         # construct rng objects
         self.rng_global, self.rng_local = new_rngs(self.comm.rank, random_seed)
 
-        # override state if provided
+        # override with state if provided
         if bit_generator_states is not None:
             self.read_rngs(bit_generator_states, different_nlocal=different_nlocal)
 

@@ -314,6 +314,7 @@ class NSConfig_ASE_Atoms():
             self.calc.command("mass * 1.0")
             self.calc.command("neigh_modify delay 0 every 1 check yes")
             self.calc.command("compute pe all pe")
+            self.calc.command("compute peatom all pe/atom")
 
             lammps_cmds = params_calc["args"]["cmds"].copy()
             for cmd in lammps_cmds:
@@ -516,6 +517,8 @@ class NSConfig_ASE_Atoms():
 
             # do an initial 'fix NS' so that every walk can start with 'unfix NS'
             self.calc.command("fix NS all ns/gmc 1 0.0")
+            # similar but for 'dump NS_traj'
+            self.calc._dump_ns_traj = False
 
         if not skip_initial_store:
             self.atoms.info["NS_energy_shift"][...] = self.calc_NS_energy_shift()
@@ -703,7 +706,7 @@ class NSConfig_ASE_Atoms():
         self.atoms.contig_storage_float[:] = source.atoms.contig_storage_float
 
 
-    def walk(self, Emax, walk_len, rng):
+    def walk(self, Emax, walk_len, rng, traj_info=None):
         """Walk a configuration
 
         Parameters
@@ -724,7 +727,7 @@ class NSConfig_ASE_Atoms():
 
         if self.walk_func.get("combined"):
             # returns list of tuples with move param attempt/success statistics
-            n_att_acc_walk = self.walk_func["combined"](self, Emax, rng, walk_len)
+            n_att_acc_walk = self.walk_func["combined"](self, Emax, rng, walk_len, traj_info=traj_info)
             for param, n_att, n_acc in n_att_acc_walk:
                 self.n_att_acc[param] += (n_att, n_acc)
         else:

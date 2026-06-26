@@ -19,6 +19,11 @@ param_defaults = {
             "max_accept_rate": 0.5,
             "adjust_factor": 1.25
         },
+        "walk_traj_info": {
+            "iter_min": -1,
+            "iter_max": -1,
+            "interval": 0,
+        },
         "clone_history": False
     },
     "ns": ["_REQ_", "_IGNORE_"],

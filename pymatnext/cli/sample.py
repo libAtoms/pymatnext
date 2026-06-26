@@ -157,6 +157,7 @@ def sample(args, MPI, NS_comm, walker_comm):
     exit_cond = NSLoopExit(params["ns"]["exit_conditions"], ns)
 
     params_step_size_tune = params_global["step_size_tune"]
+    params_walk_traj_info = params_global["walk_traj_info"]
 
     ####################################################################################################
     # prepare for loop
@@ -318,7 +319,13 @@ def sample(args, MPI, NS_comm, walker_comm):
             # walk a random config
             i_walk = ns.rng_local.integers(0, ns.n_configs_local)
 
-        ns.local_configs[i_walk].walk(ns.max_val, ns.local_walk_length, ns.rng_local)
+        if (params_walk_traj_info["interval"] > 0 and
+            loop_iter >= params_walk_traj_info["iter_min"] and
+            (params_walk_traj_info["iter_max"] < 0 or loop_iter <= params_walk_traj_info["iter_max"])):
+            i_walk_global = ns.global_ind(NS_comm.rank, i_walk)
+            walk_traj_info = {"interval": params_walk_traj_info["interval"],
+                              "label": f"{output_filename_prefix}.walk_traj.iter_{loop_iter}.ind_{i_walk_global}"}
+        ns.local_configs[i_walk].walk(ns.max_val, ns.local_walk_length, ns.rng_local, traj_info=walk_traj_info)
 
         # find new maximum
         ns.find_max()
