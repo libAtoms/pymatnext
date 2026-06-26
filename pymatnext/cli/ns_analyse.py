@@ -35,6 +35,7 @@ def main():
     p.add_argument('--nT', '-n',  help="""Number of temperatures""",type=int,required=True)
     p.add_argument('--kB', '-k',  help="""Boltzmann constant (defaults to eV/K)""", type=float, default=8.6173324e-5)
     p.add_argument('--accurate_sum', action='store_true', help="""use more accurate sum (math.fsum)""")
+    p.add_argument('--n_beta_samples', '-b', type=int, help="""number of samples from beta distribution for averaging""")
     p.add_argument('--verbose', '-v', action='store_true', help="""Verbose output (for debugging)""")
     p.add_argument('--line_skip', '-s',  help="""number of lines to skip""", type=int, default=0)
     p.add_argument('--line_end', '-l',  help="""line to ened analysis (python std. zero based last line + 1)""", type=int, default=None)
@@ -201,7 +202,7 @@ def main():
                 n_cull, vals = _get_and_remove_from_extras('n_cull', vals)
             else:
                 n_cull = header.get('n_cull', 1)
-            log_a = utils.calc_log_a(iters, n_walkers, n_cull, discrete=discrete)
+            log_a = utils.calc_log_a(iters, n_walkers, n_cull, discrete=discrete, n_beta_samples=args.n_beta_samples)
 
             # make into list of ndarrays, each of shape (Nsamples,)
             vals = list(vals.T)
