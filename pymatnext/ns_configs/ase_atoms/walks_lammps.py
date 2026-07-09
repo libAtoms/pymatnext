@@ -6,7 +6,7 @@ import lammps
 # avoiding every lammps fix from having to do the full energy shift is useful
 # we want
 #   E + P V - mu N < Emax
-# therefore, we modify Emax passed to lammps defining Emax^lammps, with V0 and N0 
+# therefore, we modify Emax passed to lammps defining Emax^lammps, with V0 and N0
 #        defined as the initial volume and species numbers
 #   E < Emax - P V0 + mu N0 = Emax^lammps
 # this is sufficient for position moves, where V and N don't change
@@ -71,7 +71,7 @@ def set_lammps_from_atoms(ns_atoms):
     pos[:] = atoms.positions
     vel[:] = atoms.arrays["NS_velocities"]
 
-def set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, update_energy_shift):
+def set_atoms_from_lammps(ns_atoms, E, F, update_energy_shift):
     """set ns_atoms.atoms object from lammps internal configuration data
 
     Stores new cell, atomic numbers, positions, velocities, as well as NS_energy, NS_forces,
@@ -81,12 +81,6 @@ def set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, update_energy_shift):
     ----------
     ns_atoms: NSConfig_ASE_Atoms
         object with configuration and calculator to store values in
-    types: np.ndarray(N_atoms, dtype=int)
-        internal LAMMPS data with LAMMPS type of each atom
-    pos: np.ndarray(N_atoms, d, dtype=float)
-        internal LAMMPS data with atomic positions
-    vel: np.ndarray(N_atoms, d, dtype=float)
-        internal LAMMPS data with atomic velocities
     E: float
         internal energy
     F: np.ndarray(N_atoms, 3, dtype=float)
@@ -94,6 +88,9 @@ def set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, update_energy_shift):
     upadte_energy_shift: bool
         recalculate and store NS_energy_shift
     """
+    # get per-atom pointers from LAMMPS
+    types, pos, vel = get_pointers_from_lammps(ns_atoms)
+
     atoms = ns_atoms.atoms
 
     atoms.numbers[:] = ns_atoms.Z_of_type[types]
@@ -189,21 +186,16 @@ def walk_combined(ns_atoms, Emax, rng, walk_len, traj_info=None):
         ns_atoms.calc.command(f"run {walk_len} post no")
         failed = False
     except Exception as exc:
-        exc_str = str(exc)
-        warnings.warn(f"LAMMPS ns/gmc run raised exception {exc_str}")
-        if "Lost atoms" in exc_str:
-            # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
-            ns_atoms.end_calculator()
-            # don't store new calculator results, since they may be from wrong positions
-            ns_atoms.init_calculator(skip_initial_store=True)
+        warnings.warn(f"LAMMPS ns/gmc run raised exception {exc}")
         failed = True
 
     if not failed:
-        # recompute, in case last step inside LAMMPS was a rejection
+        # LAMMPS ns (e.g. cell) can reject moves, and if final move is rejected,
+        # it won't update energy/force (but lammps _geometry_ should be correct).
+        # Must recompute in case last move was rejected
         E, F = extract_E_F(ns_atoms.calc, True)
         # set atoms from current lammps internal state
-        types, pos, vel = get_pointers_from_lammps(ns_atoms)
-        set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
+        set_atoms_from_lammps(ns_atoms, E, F, True)
         # wrap to avoid atoms moving far enough in periodic images for lammps to lose them
         atoms.wrap()
 
@@ -221,6 +213,13 @@ def walk_combined(ns_atoms, Emax, rng, walk_len, traj_info=None):
     ## type 8-9
     ## type_n_att = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 + 2 * 3 + 0, 0))
     ## type_n_acc = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 + 2 * 3 + 1, 0))
+
+    if failed:
+        # if "Lost atoms" arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+        # otherwise, may just end up with messed up internal state, restart anyway
+        ns_atoms.end_calculator()
+        # don't store new calculator results, since they may be from wrong positions
+        ns_atoms.init_calculator(skip_initial_store=True)
 
     return [("pos_gmc_each_atom", pos_n_att, pos_n_acc),
             ("cell_volume_per_atom", cell_n_att["volume"], cell_n_acc["volume"]),
@@ -259,22 +258,25 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         # LAMMPS ns/gmc never rejects moves, just reflects, so already computed energy is correct
         E, F = extract_E_F(ns_atoms.calc, False)
         reject = (E >= Emax)
+        failed = False
     except Exception as exc:
         exc_str = str(exc)
         warnings.warn(f"LAMMPS ns/gmc run raised exception {exc_str}")
-        if "Lost atoms" in exc_str:
-            # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
-            ns_atoms.end_calculator()
-            # don't store new calculator results, since they may be from wrong positions
-            ns_atoms.init_calculator(skip_initial_store=True)
         reject = True
+        failed = True
 
     if not reject:
         # set atoms from current lammps internal state
-        types, pos, vel = get_pointers_from_lammps(ns_atoms)
-        set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, False)
+        set_atoms_from_lammps(ns_atoms, E, F, False)
         # wrap to avoid atoms moving far enough in periodic images for lammps to lose them
         atoms.wrap()
+
+    if failed:
+        # if "Lost atoms" arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+        # can also be subtly broken in other ways
+        ns_atoms.end_calculator()
+        # don't store new calculator results, since they may be from wrong positions
+        ns_atoms.init_calculator(skip_initial_store=True)
 
     return [("pos_gmc_each_atom", 1, 0 if reject else 1)]
 
@@ -328,21 +330,15 @@ def walk_cell(ns_atoms, Emax, rng):
     except Exception as exc:
         exc_str = str(exc)
         warnings.warn(f"LAMMPS ns/cellmc run raised exception {exc_str}")
-        if "Lost atoms" in exc_str:
-            # arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
-            ns_atoms.end_calculator()
-            # don't store new calculator results, since they may be from wrong positions
-            ns_atoms.init_calculator(skip_initial_store=True)
         failed = True
 
     if not failed:
         # LAMMPS ns/cellmc can reject moves, and if final move is rejected,
         # it won't update energy/force (but lammps _geometry_ should be correct).
-        # Must recompute in case last move was rejected 
+        # Must recompute in case last move was rejected
         E, F = extract_E_F(ns_atoms.calc, True)
         # set atoms from current lammps internal state
-        types, pos, vel = get_pointers_from_lammps(ns_atoms)
-        set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
+        set_atoms_from_lammps(ns_atoms, E, F, True)
         # Not clear why cell moves require wrapping, but in practice they appear to
         atoms.wrap()
 
@@ -361,6 +357,13 @@ def walk_cell(ns_atoms, Emax, rng):
                 warnings.warn(f"LAMMPS extract_fix failed with {exc}, ignoring")
                 n_att[submove_type] = 0
                 n_acc[submove_type] = 0
+
+    if failed:
+        # if "Lost atoms" arrays will now be wrong size, and will fail in next call to set_lammps_from_atoms
+        # can also be subtly broken in other ways
+        ns_atoms.end_calculator()
+        # don't store new calculator results, since they may be from wrong positions
+        ns_atoms.init_calculator(skip_initial_store=True)
 
     return [("cell_volume_per_atom", n_att["volume"], n_acc["volume"]),
             ("cell_shear_per_rt3_atom", n_att["shear"], n_acc["shear"]),
@@ -411,13 +414,20 @@ def walk_type(ns_atoms, Emax, rng):
     if not failed:
         # LAMMPS ns/type can reject moves, and if final move is rejected,
         # it won't update energy/force (but lammps _geometry_ should be correct).
-        # Must recompute in case last move was rejected 
+        # Must recompute in case last move was rejected
         E, F = extract_E_F(ns_atoms.calc, True)
         # set atoms from current lammps internal state
-        types, pos, vel = get_pointers_from_lammps(ns_atoms)
-        set_atoms_from_lammps(ns_atoms, types, pos, vel, E, F, True)
+        set_atoms_from_lammps(ns_atoms, E, F, True)
 
-    # not actually always satisfied, e.g. if there's degeneracy (so some config 
+    if failed:
+        # if "Lost atoms" (should never be the case for type) arrays will now be wrong size, and will fail in
+        #      next call to set_lammps_from_atoms
+        # can also be subtly broken in other ways
+        ns_atoms.end_calculator()
+        # don't store new calculator results, since they may be from wrong positions
+        ns_atoms.init_calculator(skip_initial_store=True)
+
+    # not actually always satisfied, e.g. if there's degeneracy (so some config
     # starts with E == Emax) and a walk gets no accepted moves (so E is not lowered below Emax)
     #
     # assert E + ns_atoms.atoms.info["NS_energy_shift"] < Emax_orig:
