@@ -55,7 +55,7 @@ class NS:
         # local walk is shortened by factor of number of parallel processes
         self.local_walk_length = int(self.global_walk_length / comm.size)
         # step size tune walk length from local walk if none is set
-        if params_ns["step_size_tune_walk_length"] == "_NONE_":
+        if params_ns["step_size_tune_walk_length"] <= 0:
             self.step_size_tune_walk_length = self.local_walk_length
         else:
             self.step_size_tune_walk_length = params_ns["step_size_tune_walk_length"]
