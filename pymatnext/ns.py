@@ -1,5 +1,6 @@
 import importlib
 
+import sys
 import re
 from pathlib import Path
 
@@ -53,6 +54,11 @@ class NS:
 
         # local walk is shortened by factor of number of parallel processes
         self.local_walk_length = int(self.global_walk_length / comm.size)
+        # step size tune walk length from local walk if none is set
+        if params_ns["step_size_tune_walk_length"] <= 0:
+            self.step_size_tune_walk_length = self.local_walk_length
+        else:
+            self.step_size_tune_walk_length = params_ns["step_size_tune_walk_length"]
 
         # allocate correct numbers of configs to each node
         if self.n_configs_global % self.comm.size == 0:
@@ -333,7 +339,7 @@ class NS:
         # save data from local_configs[0], which will be used for all pilot walks
         local_configs_0_data = self.local_configs[0].backup()
 
-        first_iter = True
+        iter_i = 0
 
         while True:
             accept_freq = {k: np.zeros(2, dtype=int) for k in max_step_size}
@@ -345,7 +351,7 @@ class NS:
                     self.local_configs[0].copy_contents(ns_config)
 
                 self.local_configs[0].reset_walk_counters()
-                accept_freq_contribution = self.local_configs[0].walk(self.max_val, self.local_walk_length, self.rng_local)
+                accept_freq_contribution = self.local_configs[0].walk(self.max_val, self.step_size_tune_walk_length, self.rng_local)
                 for k in accept_freq:
                     accept_freq[k] += accept_freq_contribution[k]
 
@@ -353,10 +359,12 @@ class NS:
             accept_freq_values = self.comm.allreduce(np.asarray(list(accept_freq.values())), self.MPI.SUM)
             accept_freq = {k: v for k, v in zip(accept_freq.keys(), accept_freq_values)}
 
-            if first_iter and self.comm.rank == 0:
+            # not verbose enough?
+            # if iter_i == 0 and self.comm.rank == 0:
+            if self.comm.rank == 0:
                 for param_name, max_val in max_step_size.items():
-                    print(f"step_size_tune initial {param_name} size {self.local_configs[0].step_size[param_name]} max {max_val} freq {accept_freq[param_name]}")
-                first_iter = False
+                    print(f"step_size_tune iter {iter_i} {param_name} size {self.local_configs[0].step_size[param_name]} max {max_val} freq {accept_freq[param_name]}")
+                sys.stdout.flush()
 
             # It looks like the following should always give the same values, hence exit
             # condition, on all MPI tasks, but this is not guaranteed and can lead to deadlocks
@@ -394,9 +402,12 @@ class NS:
             if any(np.asarray(list(step_size.values())) < 1.0e-12):
                 raise RuntimeError(f"Stepsize got too small with automatic tuning {step_size}")
 
+            iter_i += 1
+
         if self.comm.rank == 0:
             for param_name, max_val in max_step_size.items():
                 print(f"step_size_tune final {param_name} size {self.local_configs[0].step_size[param_name]}")
+            sys.stdout.flush()
 
         # restore to original config
         self.local_configs[0].restore(local_configs_0_data)
