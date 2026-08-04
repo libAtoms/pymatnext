@@ -310,7 +310,14 @@ def main():
         extensive_fields = ['log_Z', 'FG', 'U', 'Cvp', 'S', 'V', 'thermal_exp']
         if comm_rank == 0:
             outfile = open(infile + '.analysis', 'w')
-            outfile.write(f"# {infile} n_walkers {n_walkers} n_cull {(n_cull if isinstance(n_cull, int) else 'VARIABLE')}\n")
+            if "pressure" in header:
+                P_GPa = header["pressure"] / GPa
+                if args.delta_P is not None:
+                    P_GPa += args.delta_P / GPa
+                P_header = f" P_GPa {P_GPa}"
+            else:
+                P_header = ""
+            outfile.write(f"# {infile} n_walkers {n_walkers} n_cull {(n_cull if isinstance(n_cull, int) else 'VARIABLE')}{P_header}\n")
 
             header_format = '# ' + T_format_s  + ' ' + ' '.join([str_format(formats.get(k, default_format)[1]) for k in item_keys])
             line_format =          T_format[1] + ' ' + ' '.join([formats.get(k, default_format)[1] for k in item_keys])
