@@ -11,9 +11,7 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#ifdef DEBUG
 #include <iostream>
-#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -65,7 +63,8 @@ void normalize_cumul_probs_3(double &p1, double &p2, double &p3) {
 FixNS::FixNS(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg), dx(NULL), prevx(NULL), prevtype(NULL), mu(NULL)
 {
-  // possible values: base 3 + global 2 + probabilities 3 + 1? + 9? + (1 + ntype)?
+  // possible values: base 3 + global 2 + probabilities 3 + 2? (gmc n_steps, step_size) + 10? (n_steps, min_aspect, pressure, 3 x (prob, delta), flat_V)
+  // + (1 + ntype) (n_steps, mu, mu...) + 2? ("debug" "yes", "no")
   if (strcmp(style,"ns") != 0 && narg <= 3 + 2 + 3)
     error->all(FLERR,"Illegal fix ns command");
 
@@ -117,13 +116,9 @@ FixNS::FixNS(LAMMPS *lmp, int narg, char **arg) :
       error->all(FLERR,"Illegal fix ns flat_V_prior value");
     iarg++;
 
-#ifdef DEBUG
-std::cout << "DEBUG initial vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
-#endif
+if (debug) std::cout << "DEBUG initial vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
     normalize_cumul_probs_3(pVol, pStretch, pShear);
-#ifdef DEBUG
-std::cout << "DEBUG normalized cumulative vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
-#endif
+if (debug) std::cout << "DEBUG normalized cumulative vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
 
     if (!prevx)
       memory->create(prevx,atom->nmax,3,"ns:prevx");
@@ -178,16 +173,24 @@ std::cout << "DEBUG normalized cumulative vol/stretch/shear probs " << pVol << "
 #endif
   }
 
-#ifdef DEBUG
-std::cout << "DEBUG initial pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
-#endif
+if (debug) std::cout << "DEBUG initial pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
   normalize_cumul_probs_3(pPos, pCell, pType);
-#ifdef DEBUG
-std::cout << "DEBUG cumulative normalized pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
-#endif
+if (debug) std::cout << "DEBUG cumulative normalized pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
 
   max_n_steps = (pos_n_steps > cell_n_steps) ? pos_n_steps : cell_n_steps;
   max_n_steps = (max_n_steps > type_n_steps) ? max_n_steps : type_n_steps;
+
+  // debug
+  if (narg - iarg >= 2) {
+    if (strcmp(arg[iarg++], "debug") != 0)
+        error->all(FLERR, "Unknown argument when searching for 'debug'");
+
+    debug = 1;
+    if (strcmp(arg[iarg],"no") == 0) debug = 0;
+    else if (strcmp(arg[iarg],"yes") != 0)
+      error->all(FLERR,"Illegal fix ns/type debug value");
+    iarg++;
+  }
 
   if (narg - iarg < 0)
     error->all(FLERR,"Illegal fix ns command - extra arguments left after parsing");
@@ -328,17 +331,13 @@ void FixNS::initial_integrate(int vflag)
     // to accommodate longest (across 3 step types) mini-traj. This
     // should ensure correct ratio of step types
     if (update->laststep + 1 - update->ntimestep < max_n_steps) {
-#ifdef DEBUG
-std::cout << "initial_integrate not enough steps left " << update->laststep << " + 1 - " << update->ntimestep << " < " << max_n_steps << std::endl;
-#endif
+if (debug) std::cout << "initial_integrate not enough steps left " << update->laststep << " + 1 - " << update->ntimestep << " < " << max_n_steps << std::endl;
       // no time for another mini traj
       state_cur_move = MOVE_NONE;
     } else {
       // pick new move type, all processes must agree
       double rv = random_g->uniform();
-#ifdef DEBUG
-std::cout << "initial_integrate pick rv " << rv <<  " probs " << pPos << " " << pCell << " " << pType << std::endl;
-#endif
+if (debug) std::cout << "initial_integrate pick rv " << rv <<  " probs " << pPos << " " << pCell << " " << pType << std::endl;
       if (rv < pPos) {
         state_cur_move = MOVE_POS;
         pos_gmc_traj_prep();
@@ -352,10 +351,7 @@ std::cout << "initial_integrate pick rv " << rv <<  " probs " << pPos << " " << 
       }
     }
   }
-#ifdef DEBUG
-else
-std::cout << "initial_integrate continue with current move type" << std::endl;
-#endif
+else if (debug) std::cout << "initial_integrate continue with current move type" << std::endl;
 
   state_traj_steps_remaining--;
 
@@ -414,9 +410,7 @@ void FixNS::pos_gmc_traj_prep()
 
 void FixNS::pos_gmc_initial_integrate()
 {
-#ifdef DEBUG
-std::cout << "POS pos_gmc_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
-#endif
+if (debug) std::cout << "POS pos_gmc_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
   // update x of atoms in group
   double **x = atom->x;
   int *mask = atom->mask;
@@ -434,9 +428,7 @@ std::cout << "POS pos_gmc_initial_integrate ecurrent " << modify->compute[modify
 
 void FixNS::cell_initial_integrate()
 {
-#ifdef DEBUG
-std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
-#endif
+if (debug) std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
   // do move (unles rejected)
 
   int natoms = atom->natoms;
@@ -482,20 +474,14 @@ std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->
 
     double dV = random_g->gaussian(0.0, dVol);
     double new_V = orig_V + dV;
-#ifdef DEBUG
-    std::cout << "CELL VOLUME volumetric strain " << dV << " / " << orig_V << " = " << dV/orig_V << " ";
-#endif
+if (debug) std::cout << "CELL VOLUME volumetric strain " << dV << " / " << orig_V << " = " << dV/orig_V << " ";
     if (new_V/orig_V < 0.5) {
       cell_move_rejected_early = true;
-#ifdef DEBUG
-      std::cout << "CELL REJECT new_V/orig_V < 0.5" << std::endl;
-#endif
+if (debug) std::cout << "CELL REJECT new_V/orig_V < 0.5" << std::endl;
     } else {
       if (flat_V_prior == 0 && new_V < orig_V && random_g->uniform() > pow(new_V / orig_V, natoms)) {
         cell_move_rejected_early = true;
-#ifdef DEBUG
-        std::cout << "CELL REJECT V probability " << pow(new_V / orig_V, natoms) << std::endl;
-#endif
+if (debug) std::cout << "CELL REJECT V probability " << pow(new_V / orig_V, natoms) << std::endl;
       } else {
         double transform_diag = pow(new_V / orig_V, 1.0/3.0);
         new_cell[0][0] = boxext[0] * transform_diag;
@@ -515,18 +501,14 @@ std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->
     cell_cur_move = MOVE_STRETCH;
     // stretch step
     // pick directions to use v_ind and (v_ind+1)%3
-#ifdef DEBUG
-    std::cout << "CELL STRETCH ";
-#endif
+if (debug) std::cout << "CELL STRETCH ";
     int v_ind = int(3 * random_g->uniform()) % 3;
     rv = random_g->gaussian(0.0, dStretch);
     double transform_diag[3];
     transform_diag[v_ind] = exp(rv);
     transform_diag[(v_ind+1)%3] = exp(-rv);
     transform_diag[(v_ind+2)%3] = 1.0;
-#ifdef DEBUG
-    std::cout << transform_diag[0] << " " << transform_diag[1] << " " << transform_diag[2] << " ";
-#endif
+if (debug) std::cout << transform_diag[0] << " " << transform_diag[1] << " " << transform_diag[2] << " ";
     // create new cell for aspect ratio test and new domain
     new_cell[0][0] = boxext[0] * transform_diag[0];
     new_cell[0][1] = 0.0;
@@ -539,18 +521,14 @@ std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->
     new_cell[2][2] = boxext[2] * transform_diag[2];
     if (cur_aspect_ratio(new_cell) < min_aspect_ratio) {
       cell_move_rejected_early = true;
-#ifdef DEBUG
-      std::cout << "CELL REJECT min_aspect_ratio " << cur_aspect_ratio(new_cell) << std::endl;
-#endif
+if (debug) std::cout << "CELL REJECT min_aspect_ratio " << cur_aspect_ratio(new_cell) << std::endl;
     }
   } else {
     n_attempt_shear++;
     cell_cur_move = MOVE_SHEAR;
     // shear step
     // save original cell and a temporary cell
-#ifdef DEBUG
-    std::cout << "CELL SHEAR ";
-#endif
+if (debug) std::cout << "CELL SHEAR ";
     double orig_cell[3][3], t_cell[3][3];
     t_cell[0][0] = orig_cell[0][0] = boxext[0];
     t_cell[0][1] = orig_cell[0][1] = 0.0;
@@ -572,18 +550,14 @@ std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->
         vhat[i] = orig_cell[(vec_ind + di) % 3][i];
       MathExtra::norm3(vhat);
       rv = random_g->gaussian(0.0, dShear);
-#ifdef DEBUG
-    std::cout << (vec_ind + di) % 3 << " " << rv << " ";
-#endif
+if (debug) std::cout << (vec_ind + di) % 3 << " " << rv << " ";
       for (int i=0; i < 3; i++)
         t_cell[vec_ind][i] += rv * vhat[i];
     }
 
     if (cur_aspect_ratio(t_cell) < min_aspect_ratio) {
       cell_move_rejected_early = true;
-#ifdef DEBUG
-      std::cout << "CELL REJECT min_aspect_ratio " << cur_aspect_ratio(t_cell) << std::endl;
-#endif
+if (debug) std::cout << "CELL REJECT min_aspect_ratio " << cur_aspect_ratio(t_cell) << std::endl;
     } else {
       // rotate new_cell back to LAMMPS orientation
 
@@ -633,18 +607,14 @@ std::cout << "CELL cell_initial_integrate ecurrent " << modify->compute[modify->
     domain->set_local_box();
 
     domain->lamda2x(nlocal);
-#ifdef DEBUG
-    std::cout << std::endl;
-#endif
+if (debug) std::cout << std::endl;
   }
 
 }
 
 void FixNS::type_initial_integrate()
 {
-#ifdef DEBUG
-std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
-#endif
+if (debug) std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->find_compute("thermo_pe")]->compute_scalar() << std::endl;
   // do move (unless rejected)
 
   n_attempt_type++;
@@ -657,15 +627,15 @@ std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->
   for (int iat=0; iat < nlocal; iat++)
       prevtype[iat] = type[iat];
 
-  // initialize in case step returns early
-  dmuN = 0.0;
-
 #ifdef SWAP_POS
   double **x = atom->x;
   for (int iat=0; iat < nlocal; iat++)
       for (int jat=0; jat < 3; jat++)
           prevx[iat][jat] = x[iat][jat];
 #endif
+
+  // default, in case step aborts early
+  dmuN = 0.0;
 
   // WARNING move is restricted to only one proc - fine for semi-GC, but
   // limiting for fixed composition swaps
@@ -684,10 +654,7 @@ std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->
     int new_type = 1 + (((type[atom_0]-1) + dtype) % ntypes);
     dmuN = mu[new_type-1] - mu[type[atom_0]-1];
     type[atom_0] = new_type;
-#ifdef DEBUG
-    std::cout << "TYPE SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " <<
-                                                  type[atom_0] << " mu " << mu[type[atom_0]-1] << " " << std::endl;
-#endif
+if (debug) std::cout << "TYPE SEMI-GC " << atom_0 << " t " << prevtype[atom_0] << " mu " << mu[prevtype[atom_0]-1] <<  " -> " << type[atom_0] << " mu " << mu[type[atom_0]-1] << " " << std::endl;
   } else {
     // not semi-GC, swap a pair of atoms
     bool all_same = true;
@@ -705,14 +672,14 @@ std::cout << "TYPE type_initial_integrate ecurrent " << modify->compute[modify->
         atom_1 = static_cast<int>(nlocal * rv) % nlocal;
     }
 
-#ifdef DEBUG
+if (debug) {
 #ifdef SWAP_POS
     std::cout << "TYPE SWAP i " << atom_0 << " type " << type[atom_0] << " x " << x[atom_0][0] << " " << x[atom_0][1] << " " << x[atom_0][2] << " <-> " <<
                      " i " << atom_1 << " type " << type[atom_1] << " x " << x[atom_1][0] << " " << x[atom_1][1] << " " << x[atom_1][2] << " " << std::endl;
 #else
     std::cout << "TYPE SWAP i " << atom_0 << " type " << type[atom_0] << " <-> i " << atom_1 << " type " << type[atom_1] << " " << std::endl;
 #endif
-#endif
+}
 
 #ifdef SWAP_POS
     double tx[3];
@@ -758,41 +725,27 @@ void FixNS::pos_gmc_final_integrate()
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
 
   double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
-#ifdef DEBUG
-std::cout << "POS ecurrent " << ecurrent << " + " << cumulative_dPV << " - " << cumulative_dmuN;
-#endif
+if (debug) std::cout << "POS ecurrent " << ecurrent << " + " << cumulative_dPV << " - " << cumulative_dmuN;
   ecurrent += cumulative_dPV - cumulative_dmuN;
-#ifdef DEBUG
-std::cout << " = " << ecurrent << std::endl;
-#endif
+if (debug) std::cout << " = " << ecurrent << std::endl;
 
   if (ecurrent < Emax) {
-#ifdef DEBUG
-std::cout << "POS ecurrent + dPV - dmuN = " << ecurrent << " < " << Emax << std::endl;
-#endif
+if (debug) std::cout << "POS ecurrent + dPV - dmuN = " << ecurrent << " < " << Emax << std::endl;
     // accept
     if (state_traj_steps_remaining == 0) {
-#ifdef DEBUG
-std::cout << "POS ACCEPT end of traj, increment n_success_pos" << std::endl;
-#endif
+if (debug) std::cout << "POS ACCEPT end of traj, increment n_success_pos" << std::endl;
       // final step of mini traj, accept
       n_success_pos += 1;
     }
-#ifdef DEBUG
-std::cout << "POS mid traj, continuing" << std::endl;
-#endif
+if (debug) std::cout << "POS mid traj, continuing" << std::endl;
     // accept new position and continue straight
     return;
   }
 
-#ifdef DEBUG
-std::cout << "POS ecurrent + dPV - dmuN = " << ecurrent << " >= " << Emax << std::endl;
-#endif
+if (debug) std::cout << "POS ecurrent + dPV - dmuN = " << ecurrent << " >= " << Emax << std::endl;
 
   if (state_traj_steps_remaining == 0) {
-#ifdef DEBUG
-std::cout << "POS REJECT end of traj, revert positions to prevx" << std::endl;
-#endif
+if (debug) std::cout << "POS REJECT end of traj, revert positions to prevx" << std::endl;
     // final step of mini traj, reject
     for (int i = 0; i < nlocal; i++) {
       x[i][0] = prevx[i][0];
@@ -802,9 +755,7 @@ std::cout << "POS REJECT end of traj, revert positions to prevx" << std::endl;
     return;
   }
 
-#ifdef DEBUG
-std::cout << "POS reflect" << std::endl;
-#endif
+if (debug) std::cout << "POS reflect" << std::endl;
 
   // try to reflect from boundary
   double fsum = 0;
@@ -842,13 +793,9 @@ void FixNS::cell_final_integrate()
 {
   // if potential energy is above Emax then reject move
   double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
-#ifdef DEBUG
-std::cout << "CELL ecurrent " << ecurrent << " - " << cumulative_dmuN;
-#endif
+if (debug) std::cout << "CELL ecurrent " << ecurrent << " - " << cumulative_dmuN;
   ecurrent -= cumulative_dmuN;
-#ifdef DEBUG
-std::cout << " = " << ecurrent << std::endl;
-#endif
+if (debug) std::cout << " = " << ecurrent << std::endl;
 
   if (cell_move_rejected_early) {
     return;
@@ -857,9 +804,7 @@ std::cout << " = " << ecurrent << std::endl;
   // if potential energy + d(P V) is above Emax then reject move
   // need to include previous steps' cumulative dPV contributions, as well as current ones
   if (ecurrent + cumulative_dPV + dPV >= Emax) {
-#ifdef DEBUG
-    std::cout << "CELL REJECT E == " << ecurrent << " + " << cumulative_dPV << " + " << dPV << " >= Emax == " << Emax << std::endl;
-#endif
+if (debug) std::cout << "CELL REJECT E == " << ecurrent << " + " << cumulative_dPV << " + " << dPV << " >= Emax == " << Emax << std::endl;
     // reject move, so don't touch cumulative_dPV, since type change that led to current dPV was reverted
 
     for (int i=0; i < 3; i++) {
@@ -896,7 +841,7 @@ std::cout << " = " << ecurrent << std::endl;
         default:
             error->all(FLERR,"Illegal value of cell_cur_move in increment n_success_*");
     }
-#ifdef DEBUG
+if (debug) {
 double new_cell[3][3];
 new_cell[0][0] = domain->boxhi[0] - domain->boxlo[0];
 new_cell[0][1] = 0.0;
@@ -911,7 +856,7 @@ new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
     // std::cout << "final cell " << new_cell[0][0] << " " << new_cell[0][1] << " " << new_cell[0][2] << std::endl;
     // std::cout << "           " << new_cell[1][0] << " " << new_cell[1][1] << " " << new_cell[1][2] << std::endl;
     // std::cout << "           " << new_cell[2][0] << " " << new_cell[2][1] << " " << new_cell[2][2] << std::endl;
-#endif
+} // debug
   }
 }
 
@@ -919,20 +864,14 @@ new_cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
 void FixNS::type_final_integrate()
 {
   double ecurrent = modify->compute[modify->find_compute("thermo_pe")]->compute_scalar();
-#ifdef DEBUG
-std::cout << "TYPE ecurrent " << ecurrent << " + " << cumulative_dPV;
-#endif
+if (debug) std::cout << "TYPE ecurrent " << ecurrent << " + " << cumulative_dPV;
   ecurrent += cumulative_dPV;
-#ifdef DEBUG
-std::cout << " = " << ecurrent << std::endl;
-#endif
+if (debug) std::cout << " = " << ecurrent << std::endl;
 
   // if potential energy - d(mu N) is above Emax then reject move
   // need to include previous steps' cumulative dmuN contributions, as well as current ones
   if (ecurrent - cumulative_dmuN - dmuN >= Emax) {
-#ifdef DEBUG
-    std::cout << "TYPE REJECT E == " << ecurrent << " - " << cumulative_dmuN << " - " << dmuN << " >= Emax == " << Emax << " " << std::endl;
-#endif
+if (debug) std::cout << "TYPE REJECT E == " << ecurrent << " - " << cumulative_dmuN << " - " << dmuN << " >= Emax == " << Emax << " " << std::endl;
     // reject move, so don't touch cumulative_dmuN, since type change that led to current dmuN was reverted
 
     int nlocal = atom->nlocal;
@@ -965,9 +904,7 @@ std::cout << " = " << ecurrent << std::endl;
     // accept move, so accumulate dmuN contribution from this step
     cumulative_dmuN += dmuN;
     n_success_type++;
-#ifdef DEBUG
-    std::cout << "TYPE ACCEPT E == " << ecurrent << " - " << cumulative_dmuN << " < Emax == " << Emax << std::endl;
-#endif
+if (debug) std::cout << "TYPE ACCEPT E == " << ecurrent << " - " << cumulative_dmuN << " < Emax == " << Emax << std::endl;
   }
 }
 

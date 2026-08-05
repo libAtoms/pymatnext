@@ -66,6 +66,9 @@ class FixNS : public Fix {
   char *id_pe;
   int max_n_steps;
 
+  // debugging output
+  int debug;
+
   // pos GMC internal data
   int n_attempt_pos, n_success_pos;
   // cell MC internal data
