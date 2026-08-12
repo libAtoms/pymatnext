@@ -24,7 +24,7 @@ class ExitLoop():
         self.beta = 1.0 / (T_to_ns_quant * T)
         self.log_a = np.log(ns.n_configs_global) - np.log(ns.n_configs_global + 1)
         self.log_1_minus_a = np.log(1.0 - np.exp(self.log_a))
-        self.log_Z_term_max = np.NINF
+        self.log_Z_term_max = -np.inf
 
 
     def __call__(self, loop_iter, NS_quant):

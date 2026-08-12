@@ -23,6 +23,7 @@ param_defaults = {
             "iter_min": -1,
             "iter_max": -1,
             "interval": 0,
+            "avg_times": []
         },
         "clone_history": False
     },
