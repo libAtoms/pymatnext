@@ -176,7 +176,16 @@ def walk_combined(ns_atoms, Emax, rng, walk_len, traj_info=None):
 
     if ns_atoms.calc._dump_ns_traj:
         ns_atoms.calc.command("undump NS_traj")
+        for i_avg in traj_info.get('avg_times', []):
+            ns_atoms.calc.command("undump NS_traj_{i_avg}")
     if traj_info is not None:
+        for i_avg in traj_info.get('avg_times', []):
+            cmd = f"fix ave_{i_avg} all ave/atom 1 {i_avg} {i_avg} x y z"
+            ns_atoms.calc.command(cmd)
+            traj_cmd = (f"dump NS_traj_{i_avg} all custom {i_avg} {traj_info['label']}.avg_{i_avg}.lammps-dump id type "
+                        f"f_ave_{i_avg}[1] f_ave_{i_avg}[2] f_ave_{i_avg}[3]")
+            ns_atoms.calc.command(traj_cmd)
+            ns_atoms.calc.command(f"dump_modify NS_traj_{i_avg} colname 1 id colname 2 type colname 3 x colname 4 y colname 5 z")
         traj_cmd = f"dump NS_traj all custom {traj_info['interval']} {traj_info['label']}.lammps-dump id type x y z c_peatom"
         ns_atoms.calc.command(traj_cmd)
         ns_atoms.calc._dump_ns_traj = True
