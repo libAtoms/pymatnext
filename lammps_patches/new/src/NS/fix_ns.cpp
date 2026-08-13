@@ -922,7 +922,7 @@ FixNS::~FixNS()
   if (prevtype)
     memory->destroy(prevtype);
   if (mu)
-    delete mu;
+    delete[] mu;
 }
 
 double FixNS::cur_aspect_ratio(double cell[3][3])
