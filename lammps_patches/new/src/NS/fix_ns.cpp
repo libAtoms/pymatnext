@@ -116,10 +116,6 @@ FixNS::FixNS(LAMMPS *lmp, int narg, char **arg) :
       error->all(FLERR,"Illegal fix ns flat_V_prior value");
     iarg++;
 
-if (debug) std::cout << "DEBUG initial vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
-    normalize_cumul_probs_3(pVol, pStretch, pShear);
-if (debug) std::cout << "DEBUG normalized cumulative vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
-
     if (!prevx)
       memory->create(prevx,atom->nmax,3,"ns:prevx");
 
@@ -173,13 +169,6 @@ if (debug) std::cout << "DEBUG normalized cumulative vol/stretch/shear probs " <
 #endif
   }
 
-if (debug) std::cout << "DEBUG initial pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
-  normalize_cumul_probs_3(pPos, pCell, pType);
-if (debug) std::cout << "DEBUG cumulative normalized pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
-
-  max_n_steps = (pos_n_steps > cell_n_steps) ? pos_n_steps : cell_n_steps;
-  max_n_steps = (max_n_steps > type_n_steps) ? max_n_steps : type_n_steps;
-
   // debug
   if (narg - iarg >= 2) {
     if (strcmp(arg[iarg++], "debug") != 0)
@@ -194,6 +183,19 @@ if (debug) std::cout << "DEBUG cumulative normalized pos/cell/type probs " << pP
 
   if (narg - iarg < 0)
     error->all(FLERR,"Illegal fix ns command - extra arguments left after parsing");
+
+    if (pCell > 0.0) {
+if (debug) std::cout << "DEBUG initial vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
+        normalize_cumul_probs_3(pVol, pStretch, pShear);
+if (debug) std::cout << "DEBUG normalized cumulative vol/stretch/shear probs " << pVol << " " << pStretch << " " << pShear << std::endl;
+    }
+
+if (debug) std::cout << "DEBUG initial pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
+  normalize_cumul_probs_3(pPos, pCell, pType);
+if (debug) std::cout << "DEBUG cumulative normalized pos/cell/type probs " << pPos << " " << pCell << " " << pType << std::endl;
+
+  max_n_steps = (pos_n_steps > cell_n_steps) ? pos_n_steps : cell_n_steps;
+  max_n_steps = (max_n_steps > type_n_steps) ? max_n_steps : type_n_steps;
 
   cell_cur_move = MOVE_UNDEF;
   state_cur_move = MOVE_UNDEF;
