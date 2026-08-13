@@ -172,7 +172,7 @@ def walk_combined(ns_atoms, Emax, rng, walk_len, traj_info=None):
         else:
             fix_cmd += " no"
 
-    ns_atoms.calc.command(fix_cmd)
+    ns_atoms.calc.command(fix_cmd) #  + " debug yes")
 
     if ns_atoms.calc._dump_ns_traj:
         ns_atoms.calc.command("undump NS_traj")

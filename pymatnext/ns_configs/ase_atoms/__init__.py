@@ -312,7 +312,7 @@ class NSConfig_ASE_Atoms():
             species_types = params_calc["args"]["types"]
             self.calc.command(f"create_box {len(species_types)} cell")
             self.calc.command("mass * 1.0")
-            self.calc.command("neigh_modify delay 0 every 1 check yes")
+            self.calc.command("neigh_modify delay 0 every 1 check " + params_calc["args"].get("neigh_modify_check", "no"))
             self.calc.command("compute pe all pe")
             self.calc.command("compute peatom all pe/atom")
 

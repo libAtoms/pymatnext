@@ -337,7 +337,7 @@ def sample(args, MPI, NS_comm, walker_comm):
             ns.report_store(loop_iter)
 
             time_cur = time.time()
-            if (stdout_report_interval_s > 0 and (time_cur - time_prev_stdout_report >= stdout_report_interval_s)) or loop_iter == 0:
+            if (stdout_report_interval_s => 0 and (time_cur - time_prev_stdout_report >= stdout_report_interval_s)) or loop_iter == 0:
                 print(f"NS loop {loop_iter} time {time_cur-time_prev_stdout_report:4.1f} max {ns.max_val:.6f} {ns.report()}")
                 time_prev_stdout_report = time_cur
                 sys.stdout.flush()
