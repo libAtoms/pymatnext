@@ -244,6 +244,12 @@ def sample(args, MPI, NS_comm, walker_comm):
     else:
         clone_index_exclude = 1
 
+    # override initial max val, e.g. for equilibration, or sampling a long trajectory
+    # at a pre-specified value
+    # Ugly, need a better scheme for default params/overrides, e.g. using pydantic
+    if params_global["override_initial_max_val"]:
+        ns.max_val = float(params_global["initial_max_val"])
+
     exit_normal_loop_iterable = True
     time_prev_stdout_report = time.time()
     for loop_iter in loop_iterable:

@@ -25,7 +25,9 @@ param_defaults = {
             "interval": 0,
             "avg_times": []
         },
-        "clone_history": False
+        "clone_history": False,
+        "override_initial_max_val": False,
+        "initial_max_val": 0.0
     },
     "ns": ["_REQ_", "_IGNORE_"],
     "configs": ["_REQ_", "_IGNORE_"]
