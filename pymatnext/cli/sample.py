@@ -248,7 +248,9 @@ def sample(args, MPI, NS_comm, walker_comm):
     # at a pre-specified value
     # Ugly, need a better scheme for default params/overrides, e.g. using pydantic
     if params_global["override_initial_max_val"]:
-        ns.max_val = float(params_global["initial_max_val"])
+        if params_global["initial_max_val"] < ns.max_val:
+            raise ValueError(f"Got initial_max_val {params_global['initial_max_val']} < ns.max_val {ns.max_val}")
+        ns.max_val = params_global["initial_max_val"]
 
     exit_normal_loop_iterable = True
     time_prev_stdout_report = time.time()
