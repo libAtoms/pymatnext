@@ -67,22 +67,17 @@ class SampleParams(PymatnextParams):
     ns: Annotated[NSParams, Field(description="parameters for nested-sampling iteration process")]
     configs: Annotated[ASEAtomsParams, Field(description="config-type-specific parameters")]
 
-    @classmethod
-    def default_data(cls):
-        """Return the model-default layer in TOML-compatible key form."""
-
-        return {"general": GeneralParams().model_dump()}
-
 
 def load_sample_params(input_file, overrides):
     """Load parameter layers and return the validated top-level model.
 
-    The precedence is Pydantic model defaults, package TOML, runtime TOML,
-    then command-line overrides.
+    Package TOML is merged with runtime TOML and command-line overrides;
+    Pydantic field defaults fill any values that remain absent during final
+    validation. The precedence is Pydantic defaults, package TOML, runtime
+    TOML, then command-line overrides.
     """
 
-    data = SampleParams.default_data()
-    deep_update(data, load_packaged_toml("pymatnext", DEFAULTS_RESOURCE))
+    data = load_packaged_toml("pymatnext", DEFAULTS_RESOURCE)
 
     with open(input_file) as fin:
         deep_update(data, decode_toml_none(toml.load(fin)))
