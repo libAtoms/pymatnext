@@ -13,7 +13,7 @@ import traceback
 from argparse import ArgumentParser
 
 from pymatnext.ns import NS
-from pymatnext.sample_params import load_sample_params, SampleParams
+from pymatnext.sample_params import format_sample_defaults, load_sample_params, SampleParams
 from pymatnext.sample_utils import truncate_file_first_col_iter
 
 from pymatnext.loop_exit import NSLoopExit
@@ -68,13 +68,16 @@ def parse_args(args_list=None):
     """
 
     parser = ArgumentParser()
+    parser.add_argument("--defaults", action="store_true", help="print the documented default parameter template")
     parser.add_argument("--override", "-o", action="append", default=[], metavar="KEY=VALUE",
                         help="override a parameter using a dotted path and a TOML literal, e.g. "
-                             "global.random_seed=5 or global.output_filename_prefix_extra='\".test\"'")
+                              "global.random_seed=5 or global.output_filename_prefix_extra='\".test\"'")
     parser.add_argument("--restart_diff_nproc", "-d", action="store_true", help="allow restarts to use a different number of "
-                                                                                "processors than previous partial run")
-    parser.add_argument("input", help="input parameters toml file")
+                                                                                 "processors than previous partial run")
+    parser.add_argument("input", nargs="?", help="input parameters toml file")
     args = parser.parse_args(args_list)
+    if args.input is None and not args.defaults:
+        parser.error("the following arguments are required: input")
 
     return args
 
@@ -349,6 +352,13 @@ def main(args_list=None, mpi_finalize=True):
         args = None
 
     args = MPI.COMM_WORLD.bcast(args, root=0)
+
+    if args.defaults:
+        if MPI.COMM_WORLD.rank == 0:
+            print(format_sample_defaults())
+        if mpi_finalize:
+            MPI.Finalize()
+        return
 
     sample(args, MPI, NS_comm, walker_comm)
 

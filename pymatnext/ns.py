@@ -93,7 +93,7 @@ class NS:
         else:
             # no snapshot, generate from scratch
             snapshot_state = {}
-            if params_ns["initial_config_file"] != "_NONE_":
+            if params_ns["initial_config_file"] not in (None, "_NONE_"):
                 initial_config_file = params_ns["initial_config_file"]
             else:
                 initial_config_file = None
