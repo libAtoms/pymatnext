@@ -2,7 +2,8 @@
 
 from typing import Annotated, Any, Dict, List, Optional, Union, Literal
 
-from pydantic import Field, PositiveInt
+from ase.units import GPa
+from pydantic import AliasChoices, Field, PositiveInt, model_validator
 
 from pymatnext.params import PymatnextParams
 
@@ -57,13 +58,27 @@ class SubmoveProbabilitiesParams(PymatnextParams):
 class CellWalkParams(PymatnextParams):
     min_aspect_ratio: Annotated[float, Field(default=0.8, description="minimum cell aspect ratio to accept")]
     flat_V_prior: Annotated[bool, Field(default=True, description="use a prior independent of volume, rather than ensemble-correct V^natoms")]
-    # TODO - mutually exclusive aliases
-    pressure_GPa: Annotated[float, Field(default=0.0, description="applied pressure in GPa.")]
-    pressure: Annotated[Optional[float], Field(default=None, description="applied pressure in eV/A^3")]
+    pressure: Annotated[float, Field(
+        default=0.0,
+        validation_alias=AliasChoices("pressure", "pressure_GPa"),
+        description="applied pressure in eV/A^3 (or pressure_GPa in GPa)",
+    )]
     submove_probabilities: Annotated[SubmoveProbabilitiesParams, Field(
         default_factory=SubmoveProbabilitiesParams,
         description="parameters controlling probabilities of volume, shear, and stretch move types",
     )]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_pressure(cls, data):
+        if not isinstance(data, dict):
+            return data
+        if "pressure" in data and "pressure_GPa" in data:
+            raise ValueError("Got both cell.pressure and cell.pressure_GPa")
+        if "pressure_GPa" in data:
+            data = data.copy()
+            data["pressure"] = data.pop("pressure_GPa") * GPa
+        return data
 
 
 class TypeWalkParams(PymatnextParams):

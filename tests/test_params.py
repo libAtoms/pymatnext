@@ -1,6 +1,8 @@
 import pytest
+from ase.units import GPa
 from pydantic import ValidationError
 
+from pymatnext.ns_configs.ase_atoms.ase_atoms_params import CellWalkParams
 from pymatnext.sample_params import SampleParams
 
 
@@ -58,3 +60,17 @@ def test_model_requires_sections_and_rejects_unknown_fields():
     data["global"] = {"max_iter": 1}
     with pytest.raises(ValidationError):
         SampleParams.model_validate(data)
+
+
+def test_cell_walk_pressure_aliases_are_normalized():
+    pressure = CellWalkParams.model_validate({"pressure": 0.25})
+    pressure_gpa = CellWalkParams.model_validate({"pressure_GPa": 1.5})
+
+    assert pressure.pressure == 0.25
+    assert pressure_gpa.pressure == 1.5 * GPa
+    assert "pressure_GPa" not in pressure_gpa.model_dump()
+
+
+def test_cell_walk_pressure_aliases_are_mutually_exclusive():
+    with pytest.raises(ValidationError, match="Got both cell.pressure and cell.pressure_GPa"):
+        CellWalkParams.model_validate({"pressure": 0.25, "pressure_GPa": 1.5})
