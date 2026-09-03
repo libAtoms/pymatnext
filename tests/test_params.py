@@ -1,63 +1,42 @@
-from copy import deepcopy
-
 import pytest
+from pydantic import ValidationError
 
-from pymatnext.params import check_fill_defaults, ParamError
-
-
-def test_fill_in_defaults():
-    defaults = { "step_size": ["_REQ_", 1.0], "n_steps": [1, 2], "move_type" : { "pos": 5, "cell": 6 } }
-
-    params = {"step_size": 2.0}
-    check_fill_defaults(params, defaults)
-
-    # make sure defaults were filled in properly
-
-    # replace required examples with specific values
-    defaults["step_size"] = 2.0
-    assert params == defaults
+from pymatnext.sample_params import SampleParams
 
 
-def test_missing_req():
-    defaults = { "step_size": ["_REQ_", 1.0], "n_steps": [1, 2], "move_type" : { "pos": 5, "cell": 6 } }
-
-    with pytest.raises(ParamError):
-        check_fill_defaults({"n_steps": [2, 3]}, defaults)
-
-
-def test_mismatched_type_default():
-    defaults = { "step_size": ["_REQ_", 1.0], "n_steps": [1, 2], "move_type" : { "pos": 5, "cell": 6 } }
-
-    with pytest.raises(ParamError):
-        check_fill_defaults({"step_size": True}, defaults)
-
-
-def test_mismatched_list_type():
-    defaults = { "step_size": ["_REQ_", 1.0], "n_steps": [1, 2], "move_type" : { "pos": 5, "cell": 6 } }
-
-    with pytest.raises(ParamError):
-        check_fill_defaults({"step_size": 2.0, "n_steps": ["1", "2"]}, defaults)
+def sample_data():
+    return {
+        "ns": {
+            "n_walkers": 1,
+            "walk_length": 1,
+            "configs_module": "pymatnext.ns_configs.ase_atoms",
+        },
+        "configs": {
+            "composition": "H",
+            "n_atoms": 1,
+            "initial_rand_vol_per_atom": 1.0,
+            "initial_rand_min_dist": 0.5,
+            "calculator": {"type": "ASE"},
+            "walk": {"gmc_proportion": 1.0},
+        },
+    }
 
 
-def test_mismatched_list_len():
-    defaults = { "step_size": ["_REQ_", 1.0], "n_steps": [1, 2], "move_type" : { "pos": 5, "cell": 6 } }
+def test_model_fills_defaults():
+    params = SampleParams.model_validate(sample_data())
 
-    with pytest.raises(ParamError):
-        check_fill_defaults({"step_size": 2.0, "n_steps": [1, 2, 3]}, defaults)
+    assert params.global_.output_filename_prefix == "NS"
+    assert params.ns.exit_conditions.module == "_NONE_"
+    assert params.configs.walk.gmc_traj_len == 8
 
 
-def test_ignore_item():
-    # ignored section is present but check_fill_defaults doesn't check its content
-    defaults = { "step_size": ["_REQ_", 1.0], "n_steps": [1, 2], "move_type" : "_IGNORE_" }
-    params = { "step_size":  2.0, "n_steps": [2, 3], "move_type" : { "pos": 5, "cell": 6 } }
+def test_model_requires_sections_and_rejects_unknown_fields():
+    data = sample_data()
+    del data["configs"]["walk"]
+    with pytest.raises(ValidationError):
+        SampleParams.model_validate(data)
 
-    params_orig = deepcopy(params)
-    check_fill_defaults(params, defaults)
-    assert params == params_orig
-
-    # ignored section is required but missing
-    defaults = { "step_size": ["_REQ_", 1.0], "n_steps": [1, 2], "move_type" : ["_REQ_", "_IGNORE_"] }
-    params = { "step_size":  2.0, "n_steps": [2, 3] }
-
-    with pytest.raises(ParamError):
-        check_fill_defaults(params, defaults)
+    data = sample_data()
+    data["configs"]["unknown"] = 1
+    with pytest.raises(ValidationError):
+        SampleParams.model_validate(data)

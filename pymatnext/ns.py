@@ -10,8 +10,7 @@ import numpy as np
 
 from .ns_utils import rngs as new_rngs
 
-from pymatnext.params import check_fill_defaults
-from .ns_params import param_defaults
+from .ns_params import NSParams
 
 
 class NS:
@@ -19,7 +18,7 @@ class NS:
 
     Parameters
     ----------
-    params_ns: dict
+    params_ns: NSParams
         setup parameters
     comm: Communicator
         communicator for parallelism
@@ -27,8 +26,8 @@ class NS:
         namespace needed for symbols require to call MPI functions
     random_seed: int or None
         random seed for RNGs
-    params_config: dict
-        dict for [configs] toml section
+    params_config: ASEAtomsParams
+        parameters for the built-in [configs] TOML section
     output_filename_prefix: str / Path
         prefix of all output filenames
     different_n_rng_local: bool, default False
@@ -38,7 +37,8 @@ class NS:
     """
     def __init__(self, params_ns, comm, MPI, random_seed, params_configs, output_filename_prefix, different_n_rng_local=False,
                  extra_config=False):
-        check_fill_defaults(params_ns, param_defaults, label="ns")
+        # Keep the internals mapping-based while validating direct callers too.
+        params_ns = NSParams.model_validate(params_ns).model_dump()
 
         self.comm = comm
         self.MPI = MPI

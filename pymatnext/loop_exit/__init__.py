@@ -1,21 +1,20 @@
 import importlib
 
-from pymatnext.params import check_fill_defaults
-from .loop_exit_params import param_defaults
+from .loop_exit_params import NSLoopExitParams
 
 class NSLoopExit():
     """Implement exit conditions for main NS loop
 
     Parameters
     ----------
-    params: dict {"module": str, "module_kwargs": { .. } }
-        dict defining exit conditions
+    params: NSLoopExitParams
+        parameters defining exit conditions
     ns: NS
         nested sampling object
     """
 
     def __init__(self, params, ns):
-        check_fill_defaults(params, param_defaults, label="loop_exit")
+        params = NSLoopExitParams.model_validate(params).model_dump()
 
         exit_module = params["module"]
         if exit_module is not None and exit_module != "_NONE_":

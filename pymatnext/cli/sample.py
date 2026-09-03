@@ -3,7 +3,6 @@
 import sys
 import os
 import warnings
-import re
 
 import time
 import pprint
@@ -13,11 +12,8 @@ import traceback
 
 from argparse import ArgumentParser
 
-import toml
-
 from pymatnext.ns import NS
-from pymatnext.params import check_fill_defaults
-from pymatnext.sample_params import param_defaults
+from pymatnext.sample_params import load_sample_params, SampleParams
 from pymatnext.sample_utils import truncate_file_first_col_iter
 
 from pymatnext.loop_exit import NSLoopExit
@@ -72,9 +68,9 @@ def parse_args(args_list=None):
     """
 
     parser = ArgumentParser()
-    parser.add_argument("--override_param", "-o", nargs=2, action="append", help="override a parameter, specified by xpath "
-                                                                                 "notation, e.g. /global/random_seed or "
-                                                                                 "/global/otput_filename_prefix_extra", default=[])
+    parser.add_argument("--override", "-o", action="append", default=[], metavar="KEY=VALUE",
+                        help="override a parameter using a dotted path and a TOML literal, e.g. "
+                             "global.random_seed=5 or global.output_filename_prefix_extra='\".test\"'")
     parser.add_argument("--restart_diff_nproc", "-d", action="store_true", help="allow restarts to use a different number of "
                                                                                 "processors than previous partial run")
     parser.add_argument("input", help="input parameters toml file")
@@ -100,53 +96,19 @@ def sample(args, MPI, NS_comm, walker_comm):
     walker_comm: mpi4py.Communicator or compatible
         communicator among processes of this NS walker
     """
-    # read params
+    # Load and validate sources on rank zero, then give every rank identical data.
     if NS_comm.rank == 0:
-        with open(args.input) as fin:
-            params = toml.load(fin)
+        params_data = load_sample_params(args.input, args.override).model_dump(by_alias=True)
     else:
-        params = None
-    params = NS_comm.bcast(params, root=0)
-    check_fill_defaults(params, param_defaults)
-
-    # override with command line arguments
-    for arg_name, arg_val in args.override_param:
-        arg_name_components = re.sub(r"^/", "", arg_name).split("/")
-
-        cur_param_dict = params
-        for arg_name_component in arg_name_components[:-1]:
-            cur_param_dict = cur_param_dict[arg_name_component]
-
-        arg_name_final = arg_name_components[-1]
-
-        if arg_name_final not in cur_param_dict:
-            raise ValueError(f"Failed to find final override param path component {arg_name_final} in params file dict {cur_param_dict}")
-
-        if isinstance(cur_param_dict[arg_name_final], bool):
-            if arg_val.lower() in ["t", "true"]:
-                cur_param_dict[arg_name_final] = True
-            elif arg_val.lower() in ["f", "false"]:
-                cur_param_dict[arg_name_final] = False
-            else:
-                raise ValueError("Unknown value {arg_val} for overriding bool param {arg_name}")
-        elif isinstance(cur_param_dict[arg_name_final], int):
-            cur_param_dict[arg_name_final] = int(arg_val)
-        elif isinstance(cur_param_dict[arg_name_final], float):
-            cur_param_dict[arg_name_final] = float(arg_val)
-        elif isinstance(cur_param_dict[arg_name_final], str):
-            cur_param_dict[arg_name_final] = arg_val
-        else:
-            raise ValueError(f"Can't override param of type {type(cur_param_dict[arg_name_final])}") 
-        if NS_comm.rank == 0:
-            warnings.warn(f"Overridden params file {arg_name} with {cur_param_dict[arg_name_final]}")
-
-    params_global = params["global"]
+        params_data = None
+    params = SampleParams.model_validate(NS_comm.bcast(params_data, root=0))
+    params_global = params.global_
 
     # output file prefix
-    output_filename_prefix = params_global["output_filename_prefix"] + params_global["output_filename_prefix_extra"]
+    output_filename_prefix = params_global.output_filename_prefix + params_global.output_filename_prefix_extra
 
     # create outer nested sampling
-    ns = NS(params["ns"], NS_comm, MPI, params_global["random_seed"], params["configs"], output_filename_prefix,
+    ns = NS(params.ns, NS_comm, MPI, params_global.random_seed, params.configs, output_filename_prefix,
             different_n_rng_local=args.restart_diff_nproc, extra_config=NS_comm.rank == 0)
     print(f"{NS_comm.rank}/{NS_comm.size} Got n_configs_local {ns.n_configs_local}")
 
@@ -154,10 +116,10 @@ def sample(args, MPI, NS_comm, walker_comm):
     print(f"SNAPSHOT RESTART {start_iter}")
 
     # get exit conditions
-    exit_cond = NSLoopExit(params["ns"]["exit_conditions"], ns)
+    exit_cond = NSLoopExit(params.ns.exit_conditions, ns)
 
-    params_step_size_tune = params_global["step_size_tune"]
-    params_walk_traj_info = params_global["walk_traj_info"]
+    params_step_size_tune = params_global.step_size_tune
+    params_walk_traj_info = params_global.walk_traj_info
 
     ####################################################################################################
     # prepare for loop
@@ -165,15 +127,15 @@ def sample(args, MPI, NS_comm, walker_comm):
 
     config_suffix = ns.local_configs[0].filename_suffix
 
-    traj_interval = params_global["traj_interval"]
-    sample_interval = params_global["sample_interval"]
-    snapshot_interval = params_global["snapshot_interval"]
-    snapshot_save_old = params_global["snapshot_save_old"]
-    stdout_report_interval_s = params_global["stdout_report_interval_s"]
-    step_size_tune_interval = params_step_size_tune["interval"]
+    traj_interval = params_global.traj_interval
+    sample_interval = params_global.sample_interval
+    snapshot_interval = params_global.snapshot_interval
+    snapshot_save_old = params_global.snapshot_save_old
+    stdout_report_interval_s = params_global.stdout_report_interval_s
+    step_size_tune_interval = params_step_size_tune.interval
 
     ns_file_name = f"{output_filename_prefix}.NS_samples"
-    clone_history_file_name = f"{output_filename_prefix}.clone_history" if params_global["clone_history"] else None
+    clone_history_file_name = f"{output_filename_prefix}.clone_history" if params_global.clone_history else None
     traj_file_name = f"{output_filename_prefix}.traj{config_suffix}"
 
     if NS_comm.rank == 0:
@@ -228,7 +190,7 @@ def sample(args, MPI, NS_comm, walker_comm):
         traj_file = None
         clone_history_file = None
 
-    max_iter = params_global["max_iter"]
+    max_iter = params_global.max_iter
     if max_iter > 0:
         loop_iterable = range(start_iter, max_iter)
     else:
@@ -236,7 +198,7 @@ def sample(args, MPI, NS_comm, walker_comm):
 
     if NS_comm.rank == 0:
         print("params = ", end="")
-        pprint.pprint(params, sort_dicts=False)
+        pprint.pprint(params.model_dump(by_alias=True), sort_dicts=False)
 
     # Only for one walker runs, allow culled config to be source of clone
     if ns.n_configs_global == 1:
@@ -244,19 +206,17 @@ def sample(args, MPI, NS_comm, walker_comm):
     else:
         clone_index_exclude = 1
 
-    # override initial max val, e.g. for equilibration, or sampling a long trajectory
-    # at a pre-specified value
-    # Ugly, need a better scheme for default params/overrides, e.g. using pydantic
-    if params_global["override_initial_max_val"]:
-        if params_global["initial_max_val"] < ns.max_val:
-            raise ValueError(f"Got initial_max_val {params_global['initial_max_val']} < ns.max_val {ns.max_val}")
-        ns.max_val = params_global["initial_max_val"]
+    # Override the initial maximum, e.g. for equilibration or a trajectory at a specified value.
+    if params_global.override_initial_max_val:
+        if params_global.initial_max_val < ns.max_val:
+            raise ValueError(f"Got initial_max_val {params_global.initial_max_val} < ns.max_val {ns.max_val}")
+        ns.max_val = params_global.initial_max_val
 
     exit_normal_loop_iterable = True
     time_prev_stdout_report = time.time()
     for loop_iter in loop_iterable:
         if exit_cond(ns, loop_iter):
-            warnings.warn(f'Exiting due to exit conditions {params["ns"]["exit_conditions"]}')
+            warnings.warn(f"Exiting due to exit conditions {params.ns.exit_conditions.model_dump()}")
             exit_normal_loop_iterable = False
             break
 
@@ -270,10 +230,10 @@ def sample(args, MPI, NS_comm, walker_comm):
 
         # tune step sizes at some iteration interval
         if step_size_tune_interval > 0 and loop_iter % step_size_tune_interval == 0:
-            ns.step_size_tune(n_configs=params_step_size_tune["n_configs"],
-                              min_accept_rate=params_step_size_tune["min_accept_rate"],
-                              max_accept_rate=params_step_size_tune["max_accept_rate"],
-                              adjust_factor=params_step_size_tune["adjust_factor"])
+            ns.step_size_tune(n_configs=params_step_size_tune.n_configs,
+                              min_accept_rate=params_step_size_tune.min_accept_rate,
+                              max_accept_rate=params_step_size_tune.max_accept_rate,
+                              adjust_factor=params_step_size_tune.adjust_factor)
 
         # pick random config as source for clone.
         global_ind_of_clone_source = (global_ind_of_max + clone_index_exclude +
@@ -327,11 +287,11 @@ def sample(args, MPI, NS_comm, walker_comm):
             # walk a random config
             i_walk = ns.rng_local.integers(0, ns.n_configs_local)
 
-        if (params_walk_traj_info["interval"] > 0 and
-            loop_iter >= params_walk_traj_info["iter_min"] and
-            (params_walk_traj_info["iter_max"] < 0 or loop_iter <= params_walk_traj_info["iter_max"])):
+        if (params_walk_traj_info.interval > 0 and
+            loop_iter >= params_walk_traj_info.iter_min and
+            (params_walk_traj_info.iter_max < 0 or loop_iter <= params_walk_traj_info.iter_max)):
             i_walk_global = ns.global_ind(NS_comm.rank, i_walk)
-            walk_traj_info = {"interval": params_walk_traj_info["interval"],
+            walk_traj_info = {"interval": params_walk_traj_info.interval,
                               "label": f"{output_filename_prefix}.walk_traj.iter_{loop_iter}.ind_{i_walk_global}"}
         else:
             walk_traj_info = None

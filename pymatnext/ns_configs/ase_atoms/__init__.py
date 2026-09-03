@@ -17,8 +17,7 @@ from ase.calculators.calculator import all_changes
 
 from .atoms_contig_store import AtomsContiguousStorage
 
-from pymatnext.params import check_fill_defaults
-from .ase_atoms_params import param_defaults_ase_atoms, param_defaults_walk
+from .ase_atoms_params import ASEAtomsParams
 
 try:
     import lammps
@@ -124,10 +123,10 @@ class NSConfig_ASE_Atoms():
 
         Parameters
         ----------
-        params: dict
-            [configs] toml section
+        params: ASEAtomsParams
+            parameters from the [configs] TOML section
         """
-        check_fill_defaults(params, param_defaults_ase_atoms, label="configs")
+        params = ASEAtomsParams.model_validate(params).model_dump()
         full_composition = params["full_composition"]
         if len(full_composition) == 0:
             full_composition = params["composition"]
@@ -141,7 +140,7 @@ class NSConfig_ASE_Atoms():
 
 
     def __init__(self, params, compression=np.inf, source="random", rng=None, kB=ase.units.kB, allocate_only=False):
-        check_fill_defaults(params, param_defaults_ase_atoms, label="configs")
+        params = ASEAtomsParams.model_validate(params).model_dump()
 
         if len(self._Zs) == 0:
             NSConfig_ASE_Atoms.initialize(params)
@@ -231,7 +230,6 @@ class NSConfig_ASE_Atoms():
 
         # prepare for walks
         params_walk = params["walk"]
-        check_fill_defaults(params_walk, param_defaults_walk, label="configs / walk")
 
         self._prep_walk(params_walk, vol_per_atom=initial_rand_vol_per_atom)
         self._rotate_to_lammps()
@@ -385,7 +383,7 @@ class NSConfig_ASE_Atoms():
         Parameters
         ----------
         params: dict
-            information from [config.walk] toml section for step types and proportions in walk
+            validated information from [config.walk] for step types and proportions in walk
         vol_per_atom: float, default None
             volume scale for setting default cell vol max step size. Required
             for default max step sizes for pos_gmc_each_atom or cell_volume_per_atom
@@ -812,7 +810,7 @@ class NSConfig_ASE_Atoms():
         ----------
         n_configs: int
             number of configurations to generate
-        params_configs: dict
+        params_configs: ASEAtomsParams
             parameters for creating configurations
         rng: np.random.Generator
             random number generator
@@ -823,6 +821,8 @@ class NSConfig_ASE_Atoms():
         -------
         generator returning NSConfig objects
         """
+        params_configs = ASEAtomsParams.model_validate(params_configs).model_dump()
+
         if configs_file is None:
             # source specified in params
             configs_file = params_configs.pop("file", None)

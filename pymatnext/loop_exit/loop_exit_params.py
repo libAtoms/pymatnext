@@ -1,7 +1,14 @@
-"""dict with template of parametes for [ns_exit_conditions] section
-"""
+"""Pydantic model for the ``[ns.exit_conditions]`` section."""
 
-param_defaults = {
-    "module": "_NONE_",
-    "module_kwargs": { "_IGNORE_": True }
-}
+from typing import Any, Dict
+
+from pydantic import Field
+
+from pymatnext.params import PymatnextParams
+
+
+class NSLoopExitParams(PymatnextParams):
+    """Parameters for an optional nested-sampling loop exit evaluator."""
+
+    module: str = "_NONE_"
+    module_kwargs: Dict[str, Any] = Field(default_factory=dict)
