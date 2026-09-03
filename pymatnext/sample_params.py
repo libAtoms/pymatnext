@@ -1,6 +1,6 @@
 """Top-level Pydantic model for nested-sampling parameters."""
 
-from typing import Any, List
+from typing import Annotated, Any, List
 
 import toml
 from pydantic import Field
@@ -22,52 +22,52 @@ DEFAULTS_RESOURCE = "sample_defaults.toml"
 
 
 class StepSizeTuneParams(PymatnextParams):
-    interval: int = Field(1000, description="TODO: document the step-size tuning interval.")
-    n_configs: int = Field(1, description="TODO: document the number of configurations for tuning.")
-    min_accept_rate: float = Field(0.25, description="TODO: document the minimum accepted move rate.")
-    max_accept_rate: float = Field(0.5, description="TODO: document the maximum accepted move rate.")
-    adjust_factor: float = Field(1.25, description="TODO: document the tuning adjustment factor.")
+    interval: Annotated[int, Field(default=1000, description="TODO: document the step-size tuning interval.")]
+    n_configs: Annotated[int, Field(default=1, description="TODO: document the number of configurations for tuning.")]
+    min_accept_rate: Annotated[float, Field(default=0.25, description="TODO: document the minimum accepted move rate.")]
+    max_accept_rate: Annotated[float, Field(default=0.5, description="TODO: document the maximum accepted move rate.")]
+    adjust_factor: Annotated[float, Field(default=1.25, description="TODO: document the tuning adjustment factor.")]
 
 
 class WalkTrajectoryInfoParams(PymatnextParams):
-    iter_min: int = Field(-1, description="TODO: document the first iteration that writes walk trajectories.")
-    iter_max: int = Field(-1, description="TODO: document the final iteration that writes walk trajectories.")
-    interval: int = Field(0, description="TODO: document the walk-trajectory output interval.")
-    avg_times: List[Any] = Field(default_factory=list, description="TODO: document walk-trajectory averaging times.")
+    iter_min: Annotated[int, Field(default=-1, description="TODO: document the first iteration that writes walk trajectories.")]
+    iter_max: Annotated[int, Field(default=-1, description="TODO: document the final iteration that writes walk trajectories.")]
+    interval: Annotated[int, Field(default=0, description="TODO: document the walk-trajectory output interval.")]
+    avg_times: Annotated[List[Any], Field(default_factory=list, description="TODO: document walk-trajectory averaging times.")]
 
 
 class GeneralParams(PymatnextParams):
-    output_filename_prefix: str = Field("NS", description="TODO: document the output filename prefix.")
-    output_filename_prefix_extra: str = Field("", description="TODO: document text appended to output filenames.")
-    random_seed: int = Field(-1, description="TODO: document the random-number seed.")
-    max_iter: int = Field(-1, description="TODO: document the maximum nested-sampling iterations.")
-    stdout_report_interval_s: int = Field(60, description="TODO: document the stdout reporting interval in seconds.")
-    sample_interval: int = Field(1, description="TODO: document the NS-sample output interval.")
-    traj_interval: int = Field(100, description="TODO: document the trajectory output interval.")
-    snapshot_interval: int = Field(10000, description="TODO: document the snapshot output interval.")
-    snapshot_save_old: int = Field(2, description="TODO: document how many old snapshots to retain.")
-    step_size_tune: StepSizeTuneParams = Field(
+    output_filename_prefix: Annotated[str, Field(default="NS", description="TODO: document the output filename prefix.")]
+    output_filename_prefix_extra: Annotated[str, Field(default="", description="TODO: document text appended to output filenames.")]
+    random_seed: Annotated[int, Field(default=-1, description="TODO: document the random-number seed.")]
+    max_iter: Annotated[int, Field(default=-1, description="TODO: document the maximum nested-sampling iterations.")]
+    stdout_report_interval_s: Annotated[int, Field(default=60, description="TODO: document the stdout reporting interval in seconds.")]
+    sample_interval: Annotated[int, Field(default=1, description="TODO: document the NS-sample output interval.")]
+    traj_interval: Annotated[int, Field(default=100, description="TODO: document the trajectory output interval.")]
+    snapshot_interval: Annotated[int, Field(default=10000, description="TODO: document the snapshot output interval.")]
+    snapshot_save_old: Annotated[int, Field(default=2, description="TODO: document how many old snapshots to retain.")]
+    step_size_tune: Annotated[StepSizeTuneParams, Field(
         default_factory=StepSizeTuneParams,
         description="TODO: document step-size tuning controls.",
-    )
-    walk_traj_info: WalkTrajectoryInfoParams = Field(
+    )]
+    walk_traj_info: Annotated[WalkTrajectoryInfoParams, Field(
         default_factory=WalkTrajectoryInfoParams,
         description="TODO: document walk-trajectory output controls.",
-    )
-    clone_history: bool = Field(False, description="TODO: document clone-history output.")
-    override_initial_max_val: bool = Field(False, description="TODO: document initial maximum-value override.")
-    initial_max_val: float = Field(0.0, description="TODO: document the initial maximum value.")
+    )]
+    clone_history: Annotated[bool, Field(default=False, description="TODO: document clone-history output.")]
+    override_initial_max_val: Annotated[bool, Field(default=False, description="TODO: document initial maximum-value override.")]
+    initial_max_val: Annotated[float, Field(default=0.0, description="TODO: document the initial maximum value.")]
 
 
 class SampleParams(PymatnextParams):
     """All parameters consumed by :func:`pymatnext.cli.sample.sample`."""
 
-    general: GeneralParams = Field(
+    general: Annotated[GeneralParams, Field(
         default_factory=GeneralParams,
         description="TODO: document general nested-sampling controls.",
-    )
-    ns: NSParams = Field(..., description="TODO: document nested-sampling controls.")
-    configs: ASEAtomsParams = Field(..., description="TODO: document configuration-generation controls.")
+    )]
+    ns: Annotated[NSParams, Field(description="TODO: document nested-sampling controls.")]
+    configs: Annotated[ASEAtomsParams, Field(description="TODO: document configuration-generation controls.")]
 
     @classmethod
     def default_data(cls):
