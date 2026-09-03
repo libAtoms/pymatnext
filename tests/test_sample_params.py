@@ -9,6 +9,7 @@ def test_load_sample_params_cli_overrides_input(tmp_path):
         [general]
         max_iter = 4
         output_filename_prefix_extra = ".input"
+        random_seed = 5
 
         [ns]
         n_walkers = 1

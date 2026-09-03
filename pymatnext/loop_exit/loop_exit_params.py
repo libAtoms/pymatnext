@@ -10,8 +10,8 @@ from pymatnext.params import PymatnextParams
 class NSLoopExitParams(PymatnextParams):
     """Parameters for an optional nested-sampling loop exit evaluator."""
 
-    module: Annotated[Optional[str], Field(default=None, description="TODO: document the loop-exit evaluator module.")]
+    module: Annotated[str | None, Field(default=None, description="module that defines an ExitLoop class that checks for an exit condition, with __call__ method that takes current iteration and max value and returns a bool")]
     module_kwargs: Annotated[Dict[str, Any], Field(
         default_factory=dict,
-        description="TODO: document keyword arguments for the loop-exit evaluator.",
+        description="arbitrary kwargs for ExitLoop constructor in addition to the NS object itself",
     )]

@@ -6,6 +6,9 @@ from pymatnext.sample_params import SampleParams
 
 def sample_data():
     return {
+        "general": {
+            "random_seed": 5
+        },
         "ns": {
             "n_walkers": 1,
             "walk_length": 1,

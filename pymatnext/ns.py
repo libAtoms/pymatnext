@@ -8,9 +8,9 @@ import json
 
 import numpy as np
 
-from .ns_utils import rngs as new_rngs
+from pymatnext.ns_utils import rngs as new_rngs
 
-from .ns_params import NSParams
+from pymatnext.ns_params import NSParams
 
 
 class NS:
