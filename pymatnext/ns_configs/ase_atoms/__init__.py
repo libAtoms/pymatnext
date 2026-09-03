@@ -823,10 +823,6 @@ class NSConfig_ASE_Atoms():
         """
         params_configs = ASEAtomsParams.model_validate(params_configs).model_dump()
 
-        if configs_file is None:
-            # source specified in params
-            configs_file = params_configs.pop("file", None)
-
         if configs_file is not None:
             def new_configs_generator_file():
                 with open(configs_file) as fin:

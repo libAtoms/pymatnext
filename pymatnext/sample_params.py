@@ -26,7 +26,7 @@ class StepSizeTuneParams(PymatnextParams):
     n_configs: Annotated[PositiveInt, Field(default=1, description="number of configs to run when computing step size related statistics")]
     min_accept_rate: Annotated[PositiveFloat, Field(default=0.25, description="minimum accept rate for tuning step size")]
     max_accept_rate: Annotated[PositiveFloat, Field(default=0.5, description="maximum accept rate for tuning step size")]
-    adjust_factor: Annotated[PositiveFloat, Field(default=1.25, description="TODO: document the tuning adjustment factor.")]
+    adjust_factor: Annotated[PositiveFloat, Field(default=1.25, description="factor by which step size is multiplied/divided at each tuning iteration")]
 
 
 class WalkTrajectoryInfoParams(PymatnextParams):
