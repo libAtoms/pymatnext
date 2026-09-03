@@ -36,7 +36,7 @@ class WalkTrajectoryInfoParams(PymatnextParams):
     avg_times: List[Any] = Field(default_factory=list, description="TODO: document walk-trajectory averaging times.")
 
 
-class GlobalParams(PymatnextParams):
+class GeneralParams(PymatnextParams):
     output_filename_prefix: str = Field("NS", description="TODO: document the output filename prefix.")
     output_filename_prefix_extra: str = Field("", description="TODO: document text appended to output filenames.")
     random_seed: int = Field(-1, description="TODO: document the random-number seed.")
@@ -62,10 +62,9 @@ class GlobalParams(PymatnextParams):
 class SampleParams(PymatnextParams):
     """All parameters consumed by :func:`pymatnext.cli.sample.sample`."""
 
-    global_: GlobalParams = Field(
-        default_factory=GlobalParams,
-        alias="global",
-        description="TODO: document global nested-sampling controls.",
+    general: GeneralParams = Field(
+        default_factory=GeneralParams,
+        description="TODO: document general nested-sampling controls.",
     )
     ns: NSParams = Field(..., description="TODO: document nested-sampling controls.")
     configs: ASEAtomsParams = Field(..., description="TODO: document configuration-generation controls.")
@@ -74,7 +73,7 @@ class SampleParams(PymatnextParams):
     def default_data(cls):
         """Return the model-default layer in TOML-compatible key form."""
 
-        return {"global": GlobalParams().model_dump()}
+        return {"general": GeneralParams().model_dump()}
 
 
 def load_sample_params(input_file, overrides):

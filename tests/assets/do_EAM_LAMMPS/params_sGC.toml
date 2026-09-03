@@ -1,4 +1,4 @@
-[global]
+[general]
 
     output_filename_prefix = "EAM_LAMMPS_sGC"
     random_seed = 5
@@ -11,7 +11,7 @@
 
     snapshot_interval = 50000
 
-    [global.step_size_tune]
+    [general.step_size_tune]
 
         interval = 1000
 

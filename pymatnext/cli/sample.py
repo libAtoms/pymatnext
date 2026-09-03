@@ -71,7 +71,7 @@ def parse_args(args_list=None):
     parser.add_argument("--defaults", action="store_true", help="print the documented default parameter template")
     parser.add_argument("--override", "-o", action="append", default=[], metavar="KEY=VALUE",
                         help="override a parameter using a dotted path and a TOML literal, e.g. "
-                              "global.random_seed=5 or global.output_filename_prefix_extra='\".test\"'")
+                               "general.random_seed=5 or general.output_filename_prefix_extra='\".test\"'")
     parser.add_argument("--restart_diff_nproc", "-d", action="store_true", help="allow restarts to use a different number of "
                                                                                  "processors than previous partial run")
     parser.add_argument("input", nargs="?", help="input parameters toml file")
@@ -105,13 +105,13 @@ def sample(args, MPI, NS_comm, walker_comm):
     else:
         params_data = None
     params = SampleParams.model_validate(NS_comm.bcast(params_data, root=0))
-    params_global = params.global_
+    params_general = params.general
 
     # output file prefix
-    output_filename_prefix = params_global.output_filename_prefix + params_global.output_filename_prefix_extra
+    output_filename_prefix = params_general.output_filename_prefix + params_general.output_filename_prefix_extra
 
     # create outer nested sampling
-    ns = NS(params.ns, NS_comm, MPI, params_global.random_seed, params.configs, output_filename_prefix,
+    ns = NS(params.ns, NS_comm, MPI, params_general.random_seed, params.configs, output_filename_prefix,
             different_n_rng_local=args.restart_diff_nproc, extra_config=NS_comm.rank == 0)
     print(f"{NS_comm.rank}/{NS_comm.size} Got n_configs_local {ns.n_configs_local}")
 
@@ -121,8 +121,8 @@ def sample(args, MPI, NS_comm, walker_comm):
     # get exit conditions
     exit_cond = NSLoopExit(params.ns.exit_conditions, ns)
 
-    params_step_size_tune = params_global.step_size_tune
-    params_walk_traj_info = params_global.walk_traj_info
+    params_step_size_tune = params_general.step_size_tune
+    params_walk_traj_info = params_general.walk_traj_info
 
     ####################################################################################################
     # prepare for loop
@@ -130,15 +130,15 @@ def sample(args, MPI, NS_comm, walker_comm):
 
     config_suffix = ns.local_configs[0].filename_suffix
 
-    traj_interval = params_global.traj_interval
-    sample_interval = params_global.sample_interval
-    snapshot_interval = params_global.snapshot_interval
-    snapshot_save_old = params_global.snapshot_save_old
-    stdout_report_interval_s = params_global.stdout_report_interval_s
+    traj_interval = params_general.traj_interval
+    sample_interval = params_general.sample_interval
+    snapshot_interval = params_general.snapshot_interval
+    snapshot_save_old = params_general.snapshot_save_old
+    stdout_report_interval_s = params_general.stdout_report_interval_s
     step_size_tune_interval = params_step_size_tune.interval
 
     ns_file_name = f"{output_filename_prefix}.NS_samples"
-    clone_history_file_name = f"{output_filename_prefix}.clone_history" if params_global.clone_history else None
+    clone_history_file_name = f"{output_filename_prefix}.clone_history" if params_general.clone_history else None
     traj_file_name = f"{output_filename_prefix}.traj{config_suffix}"
 
     if NS_comm.rank == 0:
@@ -193,7 +193,7 @@ def sample(args, MPI, NS_comm, walker_comm):
         traj_file = None
         clone_history_file = None
 
-    max_iter = params_global.max_iter
+    max_iter = params_general.max_iter
     if max_iter > 0:
         loop_iterable = range(start_iter, max_iter)
     else:
@@ -210,10 +210,10 @@ def sample(args, MPI, NS_comm, walker_comm):
         clone_index_exclude = 1
 
     # Override the initial maximum, e.g. for equilibration or a trajectory at a specified value.
-    if params_global.override_initial_max_val:
-        if params_global.initial_max_val < ns.max_val:
-            raise ValueError(f"Got initial_max_val {params_global.initial_max_val} < ns.max_val {ns.max_val}")
-        ns.max_val = params_global.initial_max_val
+    if params_general.override_initial_max_val:
+        if params_general.initial_max_val < ns.max_val:
+            raise ValueError(f"Got initial_max_val {params_general.initial_max_val} < ns.max_val {ns.max_val}")
+        ns.max_val = params_general.initial_max_val
 
     exit_normal_loop_iterable = True
     time_prev_stdout_report = time.time()

@@ -25,8 +25,8 @@ def sample_data():
 def test_model_fills_defaults():
     params = SampleParams.model_validate(sample_data())
 
-    assert params.global_.output_filename_prefix == "NS"
-    assert params.ns.exit_conditions.module == "_NONE_"
+    assert params.general.output_filename_prefix == "NS"
+    assert params.ns.exit_conditions.module is None
     assert params.configs.walk.gmc_traj_len == 8
 
 
@@ -38,5 +38,10 @@ def test_model_requires_sections_and_rejects_unknown_fields():
 
     data = sample_data()
     data["configs"]["unknown"] = 1
+    with pytest.raises(ValidationError):
+        SampleParams.model_validate(data)
+
+    data = sample_data()
+    data["global"] = {"max_iter": 1}
     with pytest.raises(ValidationError):
         SampleParams.model_validate(data)

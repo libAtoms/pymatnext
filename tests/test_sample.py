@@ -95,7 +95,7 @@ def do_Morse_ASE_restart(tmp_path, monkeypatch, using_mpi):
     assets_dir = Path(__file__).parent  / 'assets' / 'do_Morse_ASE'
     with open(assets_dir / 'params.toml') as fin:
         params = toml.load(fin)
-    output_filename_prefix = params["global"]["output_filename_prefix"]
+    output_filename_prefix = params["general"]["output_filename_prefix"]
     NS_samples_file = f'{output_filename_prefix}.test.NS_samples'
 
     if rank == 0:
@@ -155,11 +155,11 @@ def do_Morse_ASE(tmp_path, monkeypatch, using_mpi, restart=False, max_iter=None)
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--override', 'global.random_seed=5', '--override', 'global.output_filename_prefix_extra=".test"',
-                  '--override', 'global.clone_history=true',
+    main_args = ['--override', 'general.random_seed=5', '--override', 'general.output_filename_prefix_extra=".test"',
+                   '--override', 'general.clone_history=true',
                   str(tmp_path / 'params.toml')]
     if max_iter is not None:
-        main_args = ['--override', f'global.max_iter={max_iter}'] + main_args
+        main_args = ['--override', f'general.max_iter={max_iter}'] + main_args
 
     sample.main(main_args, mpi_finalize=False)
     del sys.path[0]
@@ -248,10 +248,10 @@ def do_EAM_LAMMPS(tmp_path, monkeypatch, using_mpi, max_iter=None):
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--override', 'global.random_seed=5', '--override', 'global.output_filename_prefix_extra=".test"',
+    main_args = ['--override', 'general.random_seed=5', '--override', 'general.output_filename_prefix_extra=".test"',
                   str(tmp_path / 'params_sGC.toml')]
     if max_iter is not None:
-        main_args = ['--override', f'global.max_iter={max_iter}'] + main_args
+        main_args = ['--override', f'general.max_iter={max_iter}'] + main_args
 
     sample.main(main_args, mpi_finalize=False)
 
@@ -302,7 +302,7 @@ def do_pressure(tmp_path, monkeypatch, toml_file, using_mpi):
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--override', 'global.random_seed=5', '--override', 'global.output_filename_prefix_extra=".test"',
+    main_args = ['--override', 'general.random_seed=5', '--override', 'general.output_filename_prefix_extra=".test"',
                   str(tmp_path / toml_file)]
 
     sample.main(main_args, mpi_finalize=False)
@@ -358,7 +358,7 @@ def do_sGC(tmp_path, monkeypatch, toml_file, using_mpi, combined=False):
         # numbers in output will vary
         monkeypatch.setenv("PYMATNEXT_NO_MPI", "1")
 
-    main_args = ['--override', 'global.random_seed=5', '--override', 'global.output_filename_prefix_extra=".test"',
+    main_args = ['--override', 'general.random_seed=5', '--override', 'general.output_filename_prefix_extra=".test"',
                   str(tmp_path / toml_file)]
 
     sample.main(main_args, mpi_finalize=False)

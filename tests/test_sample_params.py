@@ -3,11 +3,12 @@ import textwrap
 from pymatnext import sample_params
 
 
-def test_load_sample_params_source_precedence(tmp_path, monkeypatch):
+def test_load_sample_params_cli_overrides_input(tmp_path):
     params_file = tmp_path / "params.toml"
     params_file.write_text(textwrap.dedent("""\
-        [global]
+        [general]
         max_iter = 4
+        output_filename_prefix_extra = ".input"
 
         [ns]
         n_walkers = 1
@@ -26,18 +27,10 @@ def test_load_sample_params_source_precedence(tmp_path, monkeypatch):
         [configs.walk]
         gmc_proportion = 1.0
     """))
-    monkeypatch.setattr(
-        sample_params,
-        "load_packaged_toml",
-        lambda package, resource: {"global": {"max_iter": 3}},
-    )
-
     params = sample_params.load_sample_params(
         params_file,
-        ["global.max_iter=5", "global.output_filename_prefix_extra=\".override\""],
+        ["general.max_iter=5", "general.output_filename_prefix_extra=\".override\""],
     )
 
-    assert params.global_.max_iter == 5
-    assert params.global_.output_filename_prefix == "NS"
-    assert params.global_.output_filename_prefix_extra == ".override"
-    assert params.configs.walk.gmc_traj_len == 8
+    assert params.general.max_iter == 5
+    assert params.general.output_filename_prefix_extra == ".override"

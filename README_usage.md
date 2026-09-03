@@ -20,24 +20,24 @@ sampling) without having to modify the parameter file.
 
 ### Nested sampling quantities
 
- - sampled quantities in `<global.output_file_prefix><output_file_postfix>.NS_samples`
+  - sampled quantities in `<general.output_file_prefix><output_file_postfix>.NS_samples`
    - JSON format header line, prefixed by `#`,  describing NS run parameters and quantities in file, for analysis
-   - one line every `<global.sample_interval>` NS iterations, with iteration number, NS quantity, and 
+    - one line every `<general.sample_interval>` NS iterations, with iteration number, NS quantity, and 
      configuration-specific quantities specified in header `extra` dict item.
 
- - sampled configurations in `<global.output_file_prefix><output_file_postfix>.traj.<filename_suffix>` 
+  - sampled configurations in `<general.output_file_prefix><output_file_postfix>.traj.<filename_suffix>` 
    - One configuration in a type-specific format (`extxyz` for atomic configurations) every
-    `global.traj_interval` NS iterations
+     `general.traj_interval` NS iterations
 
  - snapshots
-   - NS state in `<global.output_file_prefix><output_file_postfix>.iter_<iter>.state.json>`
-   - NS configurations in `<global.output_file_prefix><output_file_postfix>.iter_<iter>.configs.<filename_suffix>>`
+    - NS state in `<general.output_file_prefix><output_file_postfix>.iter_<iter>.state.json>`
+    - NS configurations in `<general.output_file_prefix><output_file_postfix>.iter_<iter>.configs.<filename_suffix>>`
 
 ## Example
 
 Full featured example of a small system with variable cell, semi-grand-canonical run using LAMMPS internal propagators.
 ```
-[global]
+[general]
 
     output_filename_prefix = "EAM_LAMMPS_sGC"
     random_seed = 5
@@ -48,7 +48,7 @@ Full featured example of a small system with variable cell, semi-grand-canonical
 
     snapshot_interval = 50000
 
-    [global.step_size_tune]
+    [general.step_size_tune]
 
         interval = 1000
 

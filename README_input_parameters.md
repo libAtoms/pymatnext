@@ -1,6 +1,6 @@
 # comprehensive list of parameters in toml config file, with default values
 
-- [global]
+- [general]
     - output_filename_prefix = NS
     - random_seed = -1
     - max_iter = -1
@@ -72,4 +72,3 @@
         - sGC = False
         - [mu]
             - variable content
-

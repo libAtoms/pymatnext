@@ -1,4 +1,4 @@
-[global]
+[general]
 
     output_filename_prefix = "LJ_ASE_P_0.0"
     random_seed = 5
@@ -9,7 +9,7 @@
 
     snapshot_interval = 50000
 
-    [global.step_size_tune]
+    [general.step_size_tune]
 
         interval = 1000
 
