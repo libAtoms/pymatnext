@@ -1,0 +1,2 @@
+# Package-wide overrides for pymatnext sample parameters belong here.
+# Pydantic field defaults remain the base configuration layer.
