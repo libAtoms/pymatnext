@@ -36,7 +36,7 @@ The TOML string `"_NONE_"` is used to set a Python `None` value.
   - `initial_config_file = "_NONE_"` # type: str | None; file with initial configurations, if not generated randomly
   - `initial_max_val = "_NONE_"` # type: float | None; value of overriding NS energy initial maxmimum
   - `[ns.exit_conditions]` # type: NSLoopExitParams; parameters for optional exit conditions
-    - `module = "_NONE_"` # type: str | None; module that defines an `ExitLoop` class that checks for an exit condition, with `\_\_call\_\_` method that takes current iteration and max value and returns a bool
+    - `module = "_NONE_"` # type: str | None; module that defines an `ExitLoop` class that checks for an exit condition, with `__call__` method that takes current iteration and max value and returns a bool
     - `module_kwargs = {}` # type: Dict[str, Any]; arbitrary kwargs for `ExitLoop` constructor in addition to the `NS` object itself
 - `[configs]` # type: ASEAtomsParams; config-type-specific parameters
   - `full_composition = ""` # type: Composition (str | List[str | int]); composition that spans all possible elements that could appear
