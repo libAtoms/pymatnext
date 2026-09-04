@@ -170,11 +170,11 @@ FixNS::FixNS(LAMMPS *lmp, int narg, char **arg) :
   }
 
   // debug
+  debug = 0;
   if (narg - iarg >= 2) {
     if (strcmp(arg[iarg++], "debug") != 0)
         error->all(FLERR, "Unknown argument when searching for 'debug'");
 
-    debug = 0;
     if (strcmp(arg[iarg],"yes") == 0) debug = 1;
     else if (strcmp(arg[iarg],"no") != 0)
       error->all(FLERR,"Illegal fix ns/type debug value");
