@@ -38,7 +38,7 @@ sampling) without having to modify the parameter file.
 ## Example
 
 Full featured example of a small system with variable cell, semi-grand-canonical run using LAMMPS internal propagators.
-See [here][README_input_parameters.md] for full details.
+See [here](README_input_parameters.md) for full details.
 ```
 [general]
 
