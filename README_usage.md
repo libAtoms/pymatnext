@@ -9,9 +9,10 @@ Do a nested sampling run based on the parameters in `<params_file>` in [toml for
 
 ## Command line arguments
 
- - `--random_seed / s <seed>`: set a random seed (overriding parameter file)
- - `--max_iter / -i <max_iter>`: maximum NS iteration (overriding arameter file)
- - `--output_file_postfix / -p <postfix>`: a suffix to all output files that is added to the parameter file value
+ - `--override`/`-o`: override a parameter file setting.  Often used with `general.seed` and `general.output_filename_prefix_extra`
+ - `--restart_diff_nproc`, `-d`: allow restart even if number of processes is different from previous run, which will definitely
+   not be identical because parallelization sets actual walk length per iteration.  Note that restarts are never really identical
+   because of finite precision of restart files.
 
 By setting different random seeds and output postfix strings, multiple independent runs can be started (for better
 sampling) without having to modify the parameter file.
@@ -36,6 +37,7 @@ sampling) without having to modify the parameter file.
 ## Example
 
 Full featured example of a small system with variable cell, semi-grand-canonical run using LAMMPS internal propagators.
+See [here][README_input_parameters.md] for full details.
 ```
 [general]
 
