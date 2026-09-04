@@ -1,7 +1,7 @@
 # Usage
 
 ```
-pymatnext [ --random_seed / s <seed> ] [ --output_file_postfix / -p <postfix> ] [ --max_iter / -i <max iter> ] <params_file>
+pymatnext [ --override / -o <field_name>=<field_value> ] [--restart_diff_nproc / -d] <params_file>
 ```
 
 Do a nested sampling run based on the parameters in `<params_file>` in [toml format](https://toml.io/en/).
@@ -9,10 +9,11 @@ Do a nested sampling run based on the parameters in `<params_file>` in [toml for
 
 ## Command line arguments
 
- - `--override`/`-o`: override a parameter file setting.  Often used with `general.seed` and `general.output_filename_prefix_extra`
+ - `--override`/`-o`: override a parameter file setting, in toml format (so string values have to be in
+   double quotes, e.g. `-o 'general.output_filename_prefix="NS_Cu"'`).  Often used with `general.seed` and `general.output_filename_prefix_extra`
  - `--restart_diff_nproc`, `-d`: allow restart even if number of processes is different from previous run, which will definitely
-   not be identical because parallelization sets actual walk length per iteration.  Note that restarts are never really identical
-   because of finite precision of restart files.
+   not be identical because number of parallel processes sets actual walk length per iteration.  Note that restarts are never
+   really identical because of finite precision of restart files.
 
 By setting different random seeds and output postfix strings, multiple independent runs can be started (for better
 sampling) without having to modify the parameter file.
