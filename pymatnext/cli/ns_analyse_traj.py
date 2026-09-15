@@ -16,6 +16,8 @@ from importlib import import_module
 from tqdm import tqdm
 import re
 
+from contextlib import contextmanager
+
 import ase.io
 from pymatnext.analysis import utils
 
@@ -120,7 +122,7 @@ def main():
                 next_config.append(None)
 
         last_iter = -1
-        while any([c is not None for c in next_config]):
+        while any(c is not None for c in next_config):
             lowest_iter_i = np.argmin([c.info[args.ns_iter_field] if c is not None else np.infty    for c in next_config])
             assert next_config[lowest_iter_i].info[args.ns_iter_field] > last_iter
             last_iter = next_config[lowest_iter_i].info[args.ns_iter_field]
@@ -168,7 +170,7 @@ def main():
     if args.cache:
         not_all = False
         for i in range(len(args.trajfile[0])):
-            if not all([f[i] == args.trajfile[0][i] for f in args.trajfile]):
+            if not all(f[i] == args.trajfile[0][i] for f in args.trajfile):
                 not_all = True
                 break
         if not_all:
@@ -271,25 +273,31 @@ def main():
             data_scalar[a] = []
 
     linetypes = ['-', '--', '-.']
-    outfiles = {}
-    for analysis in args.analysis:
-        outfiles[analysis] = open(args.output + '.' + analysis + '.data', 'w')
-    for T_i, T in enumerate(args.temperature):
-        results_dict = utils.analyse_T(T, Es, E_min, Vs, extra_vals, log_a, args.flat_V_prior, natoms,
-                                       args.kB, 0, args.delta_P is not None and args.delta_P != 0.0, sum_f=sum_f)
-        for analysis, res in zip(args.analysis, results_dict['extra_vals']):
-            outfiles[analysis].write(f'# T {T} analysis {analysis}\n')
-            for v in res.T:
-                outfiles[analysis].write(' '.join([str(vv) for vv in v]) + '\n')
-            outfiles[analysis].write('\n\n')
-            if args.plot:
-                ax[analysis].plot(res[0], res[1], linetypes[T_i // 10], color=f'C{T_i}', label=f'T = {T} K')
-            if args.plot_scalar_vs_T:
-                if res.shape != (1, 1):
-                    raise RuntimeError(f"--plot_scalar_vs_T with a non-scalar analysis, shape {res.shape}")
-                data_scalar[analysis].append(res[0][0])
-    for outfile in outfiles.values():
-        outfile.close()
+
+    @contextmanager
+    def _open_analysis_files(args_output, args_analysis):
+        outfiles = {}
+        for analysis in args_analysis:
+            outfiles[analysis] = open(args_output + '.' + analysis + '.data', 'w') # noqa: SIM115
+        yield outfiles
+        for outfile in outfiles.values():
+            outfile.close()
+
+    with _open_analysis_files(args.output, args.analysis) as outfiles:
+        for T_i, T in enumerate(args.temperature):
+            results_dict = utils.analyse_T(T, Es, E_min, Vs, extra_vals, log_a, args.flat_V_prior, natoms,
+                                           args.kB, 0, args.delta_P is not None and args.delta_P != 0.0, sum_f=sum_f)
+            for analysis, res in zip(args.analysis, results_dict['extra_vals']):
+                outfiles[analysis].write(f'# T {T} analysis {analysis}\n')
+                for v in res.T:
+                    outfiles[analysis].write(' '.join([str(vv) for vv in v]) + '\n')
+                outfiles[analysis].write('\n\n')
+                if args.plot:
+                    ax[analysis].plot(res[0], res[1], linetypes[T_i // 10], color=f'C{T_i}', label=f'T = {T} K')
+                if args.plot_scalar_vs_T:
+                    if res.shape != (1, 1):
+                        raise RuntimeError(f"--plot_scalar_vs_T with a non-scalar analysis, shape {res.shape}")
+                    data_scalar[analysis].append(res[0][0])
 
     if args.plot:
         for fig_name, fig_obj in fig.items():

@@ -193,7 +193,7 @@ def walk_combined(ns_atoms, Emax, rng, walk_len, traj_info=None):
     try:
         ns_atoms.calc.command(f"run {walk_len} post no")
         failed = False
-    except Exception as exc:
+    except Exception as exc: # noqa: BLE001
         warnings.warn(f"LAMMPS ns/gmc run raised exception {exc}")
         failed = True
 
@@ -267,7 +267,7 @@ def walk_pos_gmc(ns_atoms, Emax, rng):
         E, F = extract_E_F(ns_atoms.calc, False)
         reject = (E >= Emax)
         failed = False
-    except Exception as exc:
+    except Exception as exc: # noqa: BLE001
         exc_str = str(exc)
         warnings.warn(f"LAMMPS ns/gmc run raised exception {exc_str}")
         reject = True
@@ -335,7 +335,7 @@ def walk_cell(ns_atoms, Emax, rng):
     try:
         ns_atoms.calc.command(f"run {ns_atoms.walk_traj_len['cell']} post no")
         failed = False
-    except Exception as exc:
+    except Exception as exc: # noqa: BLE001
         exc_str = str(exc)
         warnings.warn(f"LAMMPS ns/cellmc run raised exception {exc_str}")
         failed = True
@@ -361,7 +361,7 @@ def walk_cell(ns_atoms, Emax, rng):
             try:
                 n_att[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 0, 0))
                 n_acc[submove_type] = int(ns_atoms.calc.extract_fix("NS", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_VECTOR, 2 * submove_i + 1, 0))
-            except Exception as exc:
+            except Exception as exc: # noqa: BLE001
                 warnings.warn(f"LAMMPS extract_fix failed with {exc}, ignoring")
                 n_att[submove_type] = 0
                 n_acc[submove_type] = 0
@@ -415,7 +415,7 @@ def walk_type(ns_atoms, Emax, rng):
     try:
         ns_atoms.calc.command(f"run {ns_atoms.walk_traj_len['type']} post no")
         failed = False
-    except Exception as exc:
+    except Exception as exc: # noqa: BLE001
         warnings.warn(f"LAMMPS ns/type run raised exception {exc}")
         failed = True
 

@@ -29,22 +29,20 @@ def calc_log_a(iters, n_walkers, n_cull, discrete=False, n_beta_samples=0, beta_
     else:
 
         if n_cull != 1:
-            """
-            # UNSUPPORTED MULTIPLE CULLS
-            # assume that for multiple culls, every energy is reported, use formula from
-            #     SENS paper PRX v. 4 p 031034 (2014) Eq. 3
-            # also assume that iters array increments by one for each cull (i.e. not exactly NS iters)
-            # X_n = \prod_{i=0}^n \frac{N-i\%P}{N+1-i\%P}
-            # \log X_n = \sum_{i=0}^n \log (N-i\%P) - \log(N+1-i\%P)
-            ## using leading underscore to suppress ruff for this unused bit of code
-            _i_range_mod_n_cull = np.array(range(0, iters[-1] + 1)) % n_cull
-            _log_X_n_term = np.log(n_walkers - _i_range_mod_n_cull) - np.log(n_walkers + 1 - _i_range_mod_n_cull)
-            _log_X_n = np.cumsum(_log_X_n_term)
-            # a(iter[i]) = X(iter[i-1]) - X(iter[i])
-            #     = prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) - prod(0..iter[i]) (N-i%P)/(N+1-i%P)
-            #     = [ prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) ] * (1 - prod(iter[i-1]+1..iter[i]) (N-i%P)/(N+1-i%P))
-            #     = [ prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) ] * (1 - prod(iter[i-1]+1..iter[i]) (N-i%P)/(N+1-i%P))
-            """
+            ## # UNSUPPORTED MULTIPLE CULLS
+            ## # assume that for multiple culls, every energy is reported, use formula from
+            ## #     SENS paper PRX v. 4 p 031034 (2014) Eq. 3
+            ## # also assume that iters array increments by one for each cull (i.e. not exactly NS iters)
+            ## # X_n = \prod_{i=0}^n \frac{N-i\%P}{N+1-i\%P}
+            ## # \log X_n = \sum_{i=0}^n \log (N-i\%P) - \log(N+1-i\%P)
+            ## ## using leading underscore to suppress ruff for this unused bit of code
+            ## _i_range_mod_n_cull = np.array(range(0, iters[-1] + 1)) % n_cull
+            ## _log_X_n_term = np.log(n_walkers - _i_range_mod_n_cull) - np.log(n_walkers + 1 - _i_range_mod_n_cull)
+            ## _log_X_n = np.cumsum(_log_X_n_term)
+            ## # a(iter[i]) = X(iter[i-1]) - X(iter[i])
+            ## #     = prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) - prod(0..iter[i]) (N-i%P)/(N+1-i%P)
+            ## #     = [ prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) ] * (1 - prod(iter[i-1]+1..iter[i]) (N-i%P)/(N+1-i%P))
+            ## #     = [ prod(0..iter[i-1]) (N-i%P)/(N+1-i%P) ] * (1 - prod(iter[i-1]+1..iter[i]) (N-i%P)/(N+1-i%P))
             raise RuntimeError(f'calc_log_a for n_cull = {n_cull} != 1 not yet implemented')
 
         if n_beta_samples is None or n_beta_samples == 0:

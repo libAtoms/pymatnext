@@ -1,6 +1,8 @@
 """Top-level Pydantic model for nested-sampling parameters."""
 
-from typing import Annotated, List
+from __future__ import annotations
+
+from typing import Annotated
 
 import toml
 from pydantic import Field, PositiveInt, PositiveFloat, NonNegativeInt
@@ -33,7 +35,7 @@ class WalkTrajectoryInfoParams(PymatnextParams):
     iter_min: Annotated[NonNegativeInt | None, Field(default=None, description="first iteration at which walk trajectory is saved")]
     iter_max: Annotated[int | None, Field(default=None, description="last iteration (inclusive) at which walk trajectory is saved, negative for no maximum")]
     interval: Annotated[PositiveInt | None, Field(default=None, description="interval at which walk trajectory is saved")]
-    avg_times: Annotated[List[PositiveInt] | None, Field(default_factory=list, description="save walk trajectory with time averaging over these time scales")]
+    avg_times: Annotated[list[PositiveInt] | None, Field(default_factory=list, description="save walk trajectory with time averaging over these time scales")]
 
 
 class GeneralParams(PymatnextParams):

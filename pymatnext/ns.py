@@ -467,9 +467,9 @@ class NS:
                 # print("BOB returning", step_size)
                 return step_size, True, False, False
             step_size *= adjust_factor
-            if step_size > 1.0:
+            # if step_size > 1.0:
                 # print("BOB larger step maxed out, clipping")
-                step_size = 1.0
+            step_size = min(step_size, 1.0)
             last_too_small = True
             # print("BOB returning", step_size)
         else:

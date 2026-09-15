@@ -3,7 +3,7 @@
 from copy import deepcopy
 from enum import Enum
 from importlib.resources import files
-from typing import Annotated, Any, Dict, Literal, Tuple, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 import toml
 from pydantic import BaseModel
@@ -12,14 +12,14 @@ from pydantic import BaseModel
 NONE_SENTINEL = "_NONE_"
 
 
-def load_packaged_toml(package: str, resource: str) -> Dict[str, Any]:
+def load_packaged_toml(package: str, resource: str) -> dict[str, Any]:
     """Load a TOML resource shipped with *package*."""
 
     with files(package).joinpath(resource).open("r") as fin:
         return decode_toml_none(toml.load(fin))
 
 
-def deep_update(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+def deep_update(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge *overlay* into *base* and return *base*."""
 
     for key, value in overlay.items():
@@ -30,7 +30,7 @@ def deep_update(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]
     return base
 
 
-def parse_override(spec: str) -> Tuple[str, Any]:
+def parse_override(spec: str) -> tuple[str, Any]:
     """Parse a ``dotted.path=TOML_LITERAL`` command-line override."""
 
     if "=" not in spec:
@@ -46,7 +46,7 @@ def parse_override(spec: str) -> Tuple[str, Any]:
     return path, decode_toml_none(value)
 
 
-def apply_override(data: Dict[str, Any], dotted_path: str, value: Any) -> None:
+def apply_override(data: dict[str, Any], dotted_path: str, value: Any) -> None:
     """Set a value in a nested mapping, creating intermediate mappings as needed."""
 
     cur = data
@@ -168,7 +168,7 @@ def _field_help(name: str, field) -> list:
     return lines
 
 
-def _toml_help(model: type, table_path: Tuple[str, ...] = ()) -> list:
+def _toml_help(model: type, table_path: tuple[str, ...] = ()) -> list:
     """Recursively render a Pydantic model as an annotated TOML template."""
 
     scalar_fields = []
@@ -203,7 +203,7 @@ def format_toml_help(model: type) -> str:
     return "\n".join(_toml_help(model)).rstrip()
 
 
-def format_defaults(model: type, package_defaults: Dict[str, Any]) -> str:
+def format_defaults(model: type, package_defaults: dict[str, Any]) -> str:
     """Return package defaults and a documented TOML template for *model*."""
 
     lines = ["config file defaults:"]

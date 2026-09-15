@@ -2,7 +2,7 @@ import importlib
 
 from .loop_exit_params import NSLoopExitParams
 
-class NSLoopExit():
+class NSLoopExit:
     """Implement exit conditions for main NS loop
 
     Parameters

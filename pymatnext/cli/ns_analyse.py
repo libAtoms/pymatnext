@@ -104,6 +104,7 @@ def main():
         Es = []
         vals = []
         analysis_header = None
+        header = None
         with open(infile) as fin:
             # find header, either real data or previous analysis
             for line in fin:
@@ -157,7 +158,7 @@ def main():
             Es = np.asarray(Es)
             vals = np.asarray(vals)
 
-            def _get_and_remove_from_extras(key, vals):
+            def _get_and_remove_from_extras(key, vals, header):
                 key_ind = header['extras'].index(key)
                 vals_of_key = vals[:, key_ind].copy()
                 inds = list(range(vals.shape[1]))
@@ -175,15 +176,17 @@ def main():
                 natoms = None
             # pull out Vs
             try:
-                Vs, vals = _get_and_remove_from_extras('volume', vals)
+                Vs, vals = _get_and_remove_from_extras('volume', vals, header)
             except (KeyError, ValueError):
                 Vs = None
 
             # warn about P = 0
-            if comm_rank == 0:
-                if Vs is not None and (args.delta_P is None or args.delta_P == 0.0 or args.delta_P_GPa is None or args.delta_P_GPa == 0.0):
-                    logging.warning("Analysis at P=0 with variable cell is ill defined, and we got --delta_P None or 0.0, "
-                                    "so be careful if run had cell moves and _sampling_ P was 0.0")
+            if (comm_rank == 0 and
+                Vs is not None and
+                (args.delta_P is None or args.delta_P == 0.0 or
+                 args.delta_P_GPa is None or args.delta_P_GPa == 0.0)):
+                    logging.warning("Analysis at P=0 with variable cell is ill defined, and we got --delta_P None "
+                                    " or 0.0, so be careful if run had cell moves and _sampling_ P was 0.0")
 
             # enthalpy if needed
             if args.delta_P is not None and args.delta_P != 0.0:
@@ -199,7 +202,7 @@ def main():
             n_walkers = header['n_walkers']
             discrete = header.get('discrete', False)
             if discrete:
-                n_cull, vals = _get_and_remove_from_extras('n_cull', vals)
+                n_cull, vals = _get_and_remove_from_extras('n_cull', vals, header)
             else:
                 n_cull = header.get('n_cull', 1)
             log_a = utils.calc_log_a(iters, n_walkers, n_cull, discrete=discrete, n_beta_samples=args.n_beta_samples)
@@ -234,7 +237,7 @@ def main():
                     if comm_rank == 0 and args.plot is not None:
                         if len(args.plot) == 0:
                             raise ValueError(f"--plot must include column names from {item_keys}")
-                        if not all([colname(pfield) in item_keys for pfield in args.plot]):
+                        if not all(colname(pfield) in item_keys for pfield in args.plot):
                             raise ValueError(f'--plot contains unknown fields {set(args.plot) - set(item_keys)}, must be in {item_keys}')
 
                 results_list = list(results_dict.values())
@@ -248,9 +251,8 @@ def main():
             try:
                 data = MPI.COMM_WORLD.gather(data, root = 0)
                 data = [item for sublist in data for item in sublist]
-            except Exception as exc:
+            except Exception as exc: # noqa: BLE001
                 logging.warning(f"Exception in MPI gather '{exc}'")
-                pass
 
         else:
             # rereading an old analysis
@@ -274,7 +276,7 @@ def main():
                         data.append(fields)
 
         ##### OUTPUT ####
-        def header_col(k):
+        def header_col(k, formats, default_format):
             v = formats.get(k, default_format)[0]
             if v is None:
                 return k
@@ -309,49 +311,49 @@ def main():
 
         extensive_fields = ['log_Z', 'FG', 'U', 'Cvp', 'S', 'V', 'thermal_exp']
         if comm_rank == 0:
-            outfile = open(infile + '.analysis', 'w')
-            if "pressure" in header:
-                P_GPa = header["pressure"] / GPa
-                if args.delta_P is not None:
-                    P_GPa += args.delta_P / GPa
-                P_header = f" P_GPa {P_GPa}"
-            else:
-                P_header = ""
-            outfile.write(f"# {infile} n_walkers {n_walkers} n_cull {(n_cull if isinstance(n_cull, int) else 'VARIABLE')}{P_header}\n")
+            with open(infile + '.analysis', 'w') as outfile:
+                if "pressure" in header:
+                    P_GPa = header["pressure"] / GPa
+                    if args.delta_P is not None:
+                        P_GPa += args.delta_P / GPa
+                    P_header = f" P_GPa {P_GPa}"
+                else:
+                    P_header = ""
+                outfile.write(f"# {infile} n_walkers {n_walkers} n_cull {(n_cull if isinstance(n_cull, int) else 'VARIABLE')}{P_header}\n")
 
-            header_format = '# ' + T_format_s  + ' ' + ' '.join([str_format(formats.get(k, default_format)[1]) for k in item_keys])
-            line_format =          T_format[1] + ' ' + ' '.join([formats.get(k, default_format)[1] for k in item_keys])
+                header_format = '# ' + T_format_s  + ' ' + ' '.join([str_format(formats.get(k, default_format)[1]) for k in item_keys])
+                line_format =          T_format[1] + ' ' + ' '.join([formats.get(k, default_format)[1] for k in item_keys])
 
-            if args.plot:
-                plot_data = {'T': [], 'valid': []}
-                for k in args.plot:
-                    plot_data[colname(k)] = []
-
-            outfile.write('# ' + json.dumps(item_keys) + '\n')
-            outfile.write(header_format.format(*(['T'] + [header_col(k) for k in item_keys])) + '\n')
-            data = sorted(data, key = lambda x: x[0])
-            for row in data:
-                if extensive_N is not None:
-                    # rescale extensive quantities
-                    for field_i in range(len(row)):
-                        if item_keys[field_i-1] in extensive_fields:
-                            row[field_i] /= extensive_N
-                outfile.write(line_format.format(*row) + '\n')
                 if args.plot:
-                    plot_data['T'].append(row[0])
-                    col_i = item_keys.index('problem') + 1
-                    plot_data['valid'].append(row[col_i] == 'false')
-                    for pfield in args.plot:
-                        try:
-                            col_i = item_keys.index(colname(pfield)) + 1
-                        except ValueError:
-                            sys.stderr.write(f'ploting field {colname(pfield)} not found in {item_keys}\n')
-                            sys.exit(1)
-                        plot_data[colname(pfield)].append(row[col_i])
+                    plot_data = {'T': [], 'valid': []}
+                    for k in args.plot:
+                        plot_data[colname(k)] = []
+
+                outfile.write('# ' + json.dumps(item_keys) + '\n')
+                outfile.write(header_format.format(*(['T'] + [header_col(k, formats, default_format) for k in item_keys])) + '\n')
+                data = sorted(data, key = lambda x: x[0])
+                for row in data:
+                    if extensive_N is not None:
+                        # rescale extensive quantities
+                        for field_i in range(len(row)):
+                            if item_keys[field_i-1] in extensive_fields:
+                                row[field_i] /= extensive_N
+                    outfile.write(line_format.format(*row) + '\n')
+                    if args.plot:
+                        plot_data['T'].append(row[0])
+                        col_i = item_keys.index('problem') + 1
+                        plot_data['valid'].append(row[col_i] == 'false')
+                        for pfield in args.plot:
+                            try:
+                                col_i = item_keys.index(colname(pfield)) + 1
+                            except ValueError:
+                                sys.stderr.write(f'ploting field {colname(pfield)} not found in {item_keys}\n')
+                                sys.exit(1)
+                            plot_data[colname(pfield)].append(row[col_i])
 
             if args.plot:
-                for k in plot_data:
-                    plot_data[k] = np.asarray(plot_data[k])
+                for k, v in plot_data.items():
+                    plot_data[k] = np.asarray(v)
 
             # print('')
             # print('')
@@ -378,7 +380,7 @@ def main():
                         ax[pfield].set_xlabel('T')
                     else:
                         if pfield not in ax:
-                            ax[pfield] = ax[list(ax.keys())[0]].twinx()
+                            ax[pfield] = ax[next(iter(ax.keys()))].twinx()
                             if len(ax) > 2:
                                 # offset spine
                                 factor = 1.0 + args.plot_twinx_spacing * (len(ax) - 2)
@@ -386,7 +388,8 @@ def main():
 
                     valid_Ts_bool = plot_data['valid']
 
-                    def do_plot_sections(pfield, linestyle, color, label):
+                    def do_plot_sections(pfield, linestyle, color, label,
+                                         col_log, ax, plot_data, valid_Ts_bool, formats, default_format):
                         if col_log:
                             pp = ax[pfield].semilogy
                         else:
@@ -420,21 +423,23 @@ def main():
                            linestyle if valid_Ts_bool[section_start] else ':',
                            color=color, label=None if got_label else label)
 
-                        ax[pfield].set_ylabel(header_col(pfield))
+                        ax[pfield].set_ylabel(header_col(pfield, formats, default_format))
 
                     if args.plot_together:
-                        label = header_col(pfield)
+                        label = header_col(pfield, formats, default_format)
 
-                        if args.plot_together_filenames and pfield == list(ax.keys())[0]:
+                        if args.plot_together_filenames and pfield == next(iter(ax.keys())):
                             # first field, append filenames
                             label += ' ' + infile
                         else:
                             if infile_i != 0:
                                 label = None
 
-                        do_plot_sections(pfield, linestyles[field_i % len(linestyles)], f'C{infile_i}', label)
+                        do_plot_sections(pfield, linestyles[field_i % len(linestyles)], f'C{infile_i}', label,
+                                         col_log, ax, plot_data, valid_Ts_bool, formats, default_format)
                     else:
-                        do_plot_sections(pfield, '-', f'C{field_i}', header_col(pfield))
+                        do_plot_sections(pfield, '-', f'C{field_i}', header_col(pfield, formats, default_format),
+                                         col_log, ax, plot_data, valid_Ts_bool, formats, default_format)
 
                 if not args.plot_together:
                     fig.legend()

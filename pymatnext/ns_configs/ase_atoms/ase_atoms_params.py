@@ -1,6 +1,6 @@
 """Pydantic models for ``[configs]`` and ``[configs.walk]`` sections."""
 
-from typing import Annotated, Any, Dict, List, Union, Literal
+from typing import Annotated, Any, Union, Literal
 
 from ase.units import GPa
 from pydantic import AliasChoices, Field, PositiveInt, model_validator
@@ -8,14 +8,14 @@ from pydantic import AliasChoices, Field, PositiveInt, model_validator
 from pymatnext.params import PymatnextParams
 
 
-Composition = Union[str, List[Union[str, int]]]
+Composition = Union[str, list[Union[str, int]]]
 
 
 class CalculatorParams(PymatnextParams):
     """Calculator selection and calculator-specific free-form arguments."""
 
     type: Annotated[Literal['ASE', 'LAMMPS'], Field(description="calculator type")]
-    args: Annotated[Dict[str, Any], Field(
+    args: Annotated[dict[str, Any], Field(
         default_factory=dict,
         description="arbitrary args for calculator constructor. If 'ASE', 'module' with name of importable module defining "
                     "a `calc` Calculator object. If 'LAMMPS', 'cmds': list of `pair_style ...` etc. lammps commands, "
@@ -83,7 +83,7 @@ class CellWalkParams(PymatnextParams):
 
 class TypeWalkParams(PymatnextParams):
     sGC: Annotated[bool, Field(default=False, description="semi-grand-canonical (species change) moves.")]
-    mu: Annotated[Dict[PositiveInt, float], Field(
+    mu: Annotated[dict[PositiveInt, float], Field(
         default_factory=dict,
         description="dict with atomic numbers as keys and chemical potentials as values for semi-grand-canonical moves",
     )]
@@ -122,7 +122,7 @@ class ASEAtomsParams(PymatnextParams):
     composition: Annotated[Composition, Field(description="initial composition of configurations")]
     n_atoms: Annotated[int, Field(description="number of atoms in each configuration")]
     dims: Annotated[int, Field(default=3, description="number of dimensions (2 or 3)")]
-    pbc: Annotated[List[bool], Field(
+    pbc: Annotated[list[bool], Field(
         default_factory=lambda: [True, True, True],
         description="periodicity of system along each cell vector",
     )]

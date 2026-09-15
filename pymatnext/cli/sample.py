@@ -31,7 +31,7 @@ def init_MPI():
     # initialize MPI
     try:
         if "PYMATNEXT_NO_MPI" in os.environ:
-            raise Exception("Got PYMATNEXT_NO_MPI")
+            raise RuntimeError("Got PYMATNEXT_NO_MPI")
 
         from mpi4py import MPI
         warnings.warn(f"{MPI.COMM_WORLD.rank} Using real MPI size={MPI.COMM_WORLD.size}")
@@ -45,8 +45,8 @@ def init_MPI():
             MPI.COMM_WORLD.Abort()
             sys.__excepthook__(type, value, traceback_obj)
         sys.excepthook = mpiabort_excepthook
-    except Exception as exc:
-        warnings.warn(f"0 No MPI ({exc}), using sample_utils.MPI")
+    except Exception as exc: # noqa: BLE001
+        warnings.warn(f"0 No MPI ({exc}), using fake sample_utils.MPI")
         from pymatnext.sample_utils import MPI
     NS_comm = MPI.COMM_WORLD
     walker_comm = MPI.COMM_SELF
@@ -151,42 +151,40 @@ def sample(args, MPI, NS_comm, walker_comm):
 
             # NOTE: should move trajectory truncation into NSConfig, since it's config file-format specific
             # truncate .traj.<suffix> file
-            f_configs = open(traj_file_name, "r+")
-            while True:
-                try:
-                    config_i = ns.NSConfig.skip(f_configs)
-                except EOFError:
-                    raise RuntimeError(f"Failed to find enough lines in .traj{config_suffix} file (last config {config_i}) to reach snapshot iter {ns.snapshot_iter}")
+            with open(traj_file_name, "r+") as f_configs:
+                while True:
+                    try:
+                        config_i = ns.NSConfig.skip(f_configs)
+                    except EOFError:
+                        raise RuntimeError(f"Failed to find enough lines in .traj{config_suffix} file (last config {config_i}) to reach snapshot iter {ns.snapshot_iter}")
 
-                if config_i + traj_interval > ns.snapshot_iter:
-                    cur_pos = f_configs.tell()
-                    f_configs.truncate(cur_pos)
-                    break
+                    if config_i + traj_interval > ns.snapshot_iter:
+                        cur_pos = f_configs.tell()
+                        f_configs.truncate(cur_pos)
+                        break
 
-            f_configs.close()
-
-            ns_file = open(ns_file_name, "a")
-            traj_file = open(traj_file_name, "a")
+            ns_file = open(ns_file_name, "a") # noqa: SIM115
+            traj_file = open(traj_file_name, "a") # noqa: SIM115
             if clone_history_file_name:
-                clone_history_file = open(clone_history_file_name, "a")
+                clone_history_file = open(clone_history_file_name, "a") # noqa: SIM115
             else:
                 clone_history_file = None
 
         else:
             # run from start, open new .NS_samples, .clone_history, and .traj.<suffix> files
             # write header as needed
-            ns_file = open(ns_file_name, "w")
+            ns_file = open(ns_file_name, "w") # noqa: SIM115
             header_dict = { "n_walkers": ns.n_configs_global, "n_cull": 1 }
             header_dict.update(ns.local_configs[0].header_dict())
             ns_file.write("# " + " ".join(json.dumps(header_dict, indent=0).splitlines()) + "\n")
 
             if clone_history_file_name:
-                clone_history_file = open(clone_history_file_name, "w")
+                clone_history_file = open(clone_history_file_name, "w") # noqa: SIM115
                 clone_history_file.write(f'# {{"fields": ["loop_iter", "clone_source", "clone_target"], "n_walkers": {ns.n_configs_global}}}\n')
             else:
                 clone_history_file = None
 
-            traj_file = open(traj_file_name,  "w")
+            traj_file = open(traj_file_name,  "w") # noqa: SIM115
     else:
         ns_file = None
         traj_file = None
