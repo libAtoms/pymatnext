@@ -1,4 +1,4 @@
-[global]
+[general]
 
     output_filename_prefix = "LAMMPS_pressure"
     random_seed = 5
@@ -9,7 +9,7 @@
 
     snapshot_interval = 50
 
-    [global.step_size_tune]
+    [general.step_size_tune]
 
         interval = 200
 

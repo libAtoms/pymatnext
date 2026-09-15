@@ -2,7 +2,7 @@ import numpy as np
 
 import ase.units
 
-class ExitLoop():
+class ExitLoop:
     """Exit a loop when Z(T) at a particular temperature T is converged
 
     Parameters

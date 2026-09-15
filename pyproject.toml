@@ -2,7 +2,7 @@
 
     name = "pymatnext"
     requires-python = ">=3.9"
-    dependencies = [ "numpy", "scipy", "matplotlib", "ase", "tqdm", "toml" ]
+    dependencies = [ "numpy", "scipy", "matplotlib", "ase", "tqdm", "toml", "pydantic>=2" ]
     readme = "README.md"
     license = { file = "LICENSE" }
     dynamic = ["version"]
@@ -14,6 +14,9 @@
 
 [tool.setuptools.packages.find]
     exclude = [ "test*", "build" ]
+
+[tool.setuptools.package-data]
+    pymatnext = [ "*.toml" ]
 
 [tool.setuptools.dynamic]
     version = {attr  = "pymatnext.__version__"}

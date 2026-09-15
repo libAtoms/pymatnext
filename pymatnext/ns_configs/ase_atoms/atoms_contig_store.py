@@ -96,7 +96,7 @@ class AtomsContiguousStorage(Atoms):
             new value of float offset after the newly inserted data
         """
 
-        self.contig_storage_float[float_offset:float_offset + 9] = self.cell.reshape((-1))
+        self.contig_storage_float[float_offset:float_offset + 9] = self.cell.reshape(-1)
         self.cell.array = self.contig_storage_float[0:9].reshape((3,3))
 
         return float_offset + 9

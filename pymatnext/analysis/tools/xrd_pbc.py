@@ -365,9 +365,7 @@ ASF_b = np.asarray([
 [    0.0, 0.0, 0.0, 0.0],
 [    0.0, 0.0, 0.0, 0.0]])
 
-last_params = {}
-
-def analysis(atoms=None, twotheta_range=[1.0, 180.0], twotheta_n=None, wavelength=wavelengths['CuKa1'], do_Lorentz=False, header=False):
+def analysis(atoms=None, twotheta_range=(1.0, 180.0), twotheta_n=None, wavelength=wavelengths['CuKa1'], do_Lorentz=False, header=False):
     """do XRD analysis on one atomic config
     Parameters
     ----------
@@ -393,8 +391,6 @@ def analysis(atoms=None, twotheta_range=[1.0, 180.0], twotheta_n=None, wavelengt
     analysis results: ndarray, type float, shape (2, twotheta_n) with two-theta values and intensities
 
     """
-    global last_params
-
     if header:
         return ("$2\\theta$ (deg.)", "intensity (arb units.)")
     assert atoms is not None
@@ -441,7 +437,7 @@ def analysis(atoms=None, twotheta_range=[1.0, 180.0], twotheta_n=None, wavelengt
         k_max += 1
 
     if len(ks) == 0:
-        return np.stack([thetas, np.zeros((len(thetas)))])
+        return np.stack([thetas, np.zeros(len(thetas))])
 
     ks = np.asarray(ks)
     k_norms = np.sqrt(k_norms_sq)

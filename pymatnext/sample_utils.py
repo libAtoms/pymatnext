@@ -1,6 +1,6 @@
 import warnings
 
-class NullComm():
+class NullComm:
     """Fake alternative to mpi4py.MPI.Comm for serial run, which implements needed subset
     of mpi4py.MPI.Comm methods
     """
@@ -22,7 +22,6 @@ class NullComm():
 
     def Allgatherv(self, sendbuf, recvbuf):
         assert sendbuf == MPI.IN_PLACE
-        return
 
 class MPI:
     """Fake alternative to mpi4py.MPI for serial runs, which implements necessary subset of

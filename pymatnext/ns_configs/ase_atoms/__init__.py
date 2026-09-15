@@ -17,8 +17,7 @@ from ase.calculators.calculator import all_changes
 
 from .atoms_contig_store import AtomsContiguousStorage
 
-from pymatnext.params import check_fill_defaults
-from .ase_atoms_params import param_defaults_ase_atoms, param_defaults_walk
+from .ase_atoms_params import ASEAtomsParams
 
 try:
     import lammps
@@ -30,7 +29,7 @@ except ModuleNotFoundError:
     pass
 
 
-class NSConfig_ASE_Atoms():
+class NSConfig_ASE_Atoms:
     """Nested sampling configuration class containing an Atoms object
 
     Parameters
@@ -67,10 +66,10 @@ class NSConfig_ASE_Atoms():
     filename_suffix = ".extxyz"
     n_quantities = -1
 
-    _step_size_params = ["pos_gmc_each_atom", "cell_volume_per_atom", "cell_shear_per_rt3_atom", "cell_stretch"]
-    _max_E_hist = collections.deque(maxlen=1000)
-    _walk_moves = ["gmc", "cell", "type"]
-    _Zs = []
+    _step_size_params = ("pos_gmc_each_atom", "cell_volume_per_atom", "cell_shear_per_rt3_atom", "cell_stretch")
+    _max_E_hist = None
+    _walk_moves = ("gmc", "cell", "type")
+    _Zs = None
 
 
     @staticmethod
@@ -91,7 +90,7 @@ class NSConfig_ASE_Atoms():
         # parse composition and set up symbols and cls._Zs
         if isinstance(composition, str):
             composition_p = re.split(r"([A-Z][a-z]?[0-9]*)", re.sub(r"\s+", "", composition))
-            if any([s != "" for s in composition_p[0::2]]):
+            if any(s != "" for s in composition_p[0::2]):
                 raise ValueError(f"Unknown characters in composition {composition}")
             composition_p = composition_p[1::2]
         else:
@@ -124,14 +123,16 @@ class NSConfig_ASE_Atoms():
 
         Parameters
         ----------
-        params: dict
-            [configs] toml section
+        params: ASEAtomsParams
+            parameters from the [configs] TOML section
         """
-        check_fill_defaults(params, param_defaults_ase_atoms, label="configs")
+        params = ASEAtomsParams.model_validate(params).model_dump()
         full_composition = params["full_composition"]
         if len(full_composition) == 0:
             full_composition = params["composition"]
         cls._Zs, _ = cls._parse_composition(full_composition)
+
+        cls._max_E_hist = collections.deque(maxlen=1000)
 
         # NS quantity = internal energy + P V - \sum_i \mu_i N_i
         # cell volume
@@ -141,7 +142,7 @@ class NSConfig_ASE_Atoms():
 
 
     def __init__(self, params, compression=np.inf, source="random", rng=None, kB=ase.units.kB, allocate_only=False):
-        check_fill_defaults(params, param_defaults_ase_atoms, label="configs")
+        params = ASEAtomsParams.model_validate(params).model_dump()
 
         if len(self._Zs) == 0:
             NSConfig_ASE_Atoms.initialize(params)
@@ -231,7 +232,6 @@ class NSConfig_ASE_Atoms():
 
         # prepare for walks
         params_walk = params["walk"]
-        check_fill_defaults(params_walk, param_defaults_walk, label="configs / walk")
 
         self._prep_walk(params_walk, vol_per_atom=initial_rand_vol_per_atom)
         self._rotate_to_lammps()
@@ -385,7 +385,7 @@ class NSConfig_ASE_Atoms():
         Parameters
         ----------
         params: dict
-            information from [config.walk] toml section for step types and proportions in walk
+            validated information from [config.walk] for step types and proportions in walk
         vol_per_atom: float, default None
             volume scale for setting default cell vol max step size. Required
             for default max step sizes for pos_gmc_each_atom or cell_volume_per_atom
@@ -396,7 +396,7 @@ class NSConfig_ASE_Atoms():
         # list, so it can be used in Generator.choice, in same order as move type list
         self.walk_prob = np.asarray([params[f"{move}_proportion"] / self.walk_traj_len[move] for move in NSConfig_ASE_Atoms._walk_moves])
 
-        if all([params[f"{move}_proportion"] == 0.0 for move in NSConfig_ASE_Atoms._walk_moves]):
+        if all(params[f"{move}_proportion"] == 0.0 for move in NSConfig_ASE_Atoms._walk_moves):
             raise ValueError("At least some move must have proportion > 0")
 
         # probabilty check and normalization
@@ -430,14 +430,14 @@ class NSConfig_ASE_Atoms():
             if self.move_params["type"].get("mu", {}) == 0:
                 raise ValueError("if 'sGC' is specified, 'mu' is also required")
             mus = self.move_params["type"].pop("mu")
-            Zs = [int(k) for k in mus.keys()]
+            Zs = [int(k) for k in mus]
             self.mu[Zs] = list(mus.values())
 
             assert set(Zs) == set(self._Zs)
 
         # max step sizes
         self.max_step_size = params["max_step_size"].copy()
-        assert set(list(self.max_step_size.keys())) == set(self._step_size_params)
+        assert set(self.max_step_size.keys()) == set(self._step_size_params)
         # max step size for position GMC and cell volume defaults are scaled to volume per atom
         if self.max_step_size["pos_gmc_each_atom"] < 0.0:
             self.max_step_size["pos_gmc_each_atom"] = (vol_per_atom ** (1.0/3.0)) * np.abs(self.max_step_size["pos_gmc_each_atom"])
@@ -448,7 +448,7 @@ class NSConfig_ASE_Atoms():
 
         # actual step sizes
         self.step_size = params["step_size"].copy()
-        assert set(list(self.step_size.keys())) == set(self._step_size_params)
+        assert set(self.step_size.keys()) == set(self._step_size_params)
         # default to half the max for each type
         self.step_size = {k: (v if v >= 0.0 else self.max_step_size[k] / 2.0) for k, v in self.step_size.items()}
 
@@ -508,7 +508,7 @@ class NSConfig_ASE_Atoms():
             # there appears to have been a wrong implementation here.  Would be good to refactor somehow
             self.calc.reset_box([0.0, 0.0, 0.0], np.diag(self.atoms.cell), self.atoms.cell[1, 0], self.atoms.cell[2, 1], self.atoms.cell[2, 0])
             self.calc.create_atoms(len(self.atoms), list(np.arange(1, 1 + len(self.atoms))), self.type_of_Z[self.atoms.numbers],
-                                   self.atoms.positions.reshape((-1)), self.atoms.arrays["NS_velocities"].reshape((-1)))
+                                   self.atoms.positions.reshape(-1), self.atoms.arrays["NS_velocities"].reshape(-1))
             self.calc.command("run 0")
             if not skip_initial_store:
                 self.atoms.info["NS_energy"][...] = self.calc.extract_compute("pe", lammps.LMP_STYLE_GLOBAL, lammps.LMP_TYPE_SCALAR)
@@ -607,7 +607,7 @@ class NSConfig_ASE_Atoms():
             yield at
 
 
-    def write(self, fileobj, extra_info={}, full_state=False):
+    def write(self, fileobj, extra_info={}, full_state=False): # noqa: B006
         """write a configuration to file object
 
         Parameters
@@ -812,7 +812,7 @@ class NSConfig_ASE_Atoms():
         ----------
         n_configs: int
             number of configurations to generate
-        params_configs: dict
+        params_configs: ASEAtomsParams
             parameters for creating configurations
         rng: np.random.Generator
             random number generator
@@ -823,9 +823,7 @@ class NSConfig_ASE_Atoms():
         -------
         generator returning NSConfig objects
         """
-        if configs_file is None:
-            # source specified in params
-            configs_file = params_configs.pop("file", None)
+        params_configs = ASEAtomsParams.model_validate(params_configs).model_dump()
 
         if configs_file is not None:
             def new_configs_generator_file():

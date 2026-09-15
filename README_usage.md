@@ -1,7 +1,7 @@
 # Usage
 
 ```
-pymatnext [ --random_seed / s <seed> ] [ --output_file_postfix / -p <postfix> ] [ --max_iter / -i <max iter> ] <params_file>
+pymatnext [ --override / -o <field_name>=<field_value> ] [--restart_diff_nproc / -d] <params_file>
 ```
 
 Do a nested sampling run based on the parameters in `<params_file>` in [toml format](https://toml.io/en/).
@@ -9,9 +9,11 @@ Do a nested sampling run based on the parameters in `<params_file>` in [toml for
 
 ## Command line arguments
 
- - `--random_seed / s <seed>`: set a random seed (overriding parameter file)
- - `--max_iter / -i <max_iter>`: maximum NS iteration (overriding arameter file)
- - `--output_file_postfix / -p <postfix>`: a suffix to all output files that is added to the parameter file value
+ - `--override`/`-o`: override a parameter file setting, in toml format (so string values have to be in
+   double quotes, e.g. `-o 'general.output_filename_prefix="NS_Cu"'`).  Often used with `general.seed` and `general.output_filename_prefix_extra`
+ - `--restart_diff_nproc`, `-d`: allow restart even if number of processes is different from previous run, which will definitely
+   not be identical because number of parallel processes sets actual walk length per iteration.  Note that restarts are never
+   really identical because of finite precision of restart files.
 
 By setting different random seeds and output postfix strings, multiple independent runs can be started (for better
 sampling) without having to modify the parameter file.
@@ -20,24 +22,25 @@ sampling) without having to modify the parameter file.
 
 ### Nested sampling quantities
 
- - sampled quantities in `<global.output_file_prefix><output_file_postfix>.NS_samples`
+  - sampled quantities in `<general.output_file_prefix><output_file_postfix>.NS_samples`
    - JSON format header line, prefixed by `#`,  describing NS run parameters and quantities in file, for analysis
-   - one line every `<global.sample_interval>` NS iterations, with iteration number, NS quantity, and 
+    - one line every `<general.sample_interval>` NS iterations, with iteration number, NS quantity, and 
      configuration-specific quantities specified in header `extra` dict item.
 
- - sampled configurations in `<global.output_file_prefix><output_file_postfix>.traj.<filename_suffix>` 
+  - sampled configurations in `<general.output_file_prefix><output_file_postfix>.traj.<filename_suffix>` 
    - One configuration in a type-specific format (`extxyz` for atomic configurations) every
-    `global.traj_interval` NS iterations
+     `general.traj_interval` NS iterations
 
  - snapshots
-   - NS state in `<global.output_file_prefix><output_file_postfix>.iter_<iter>.state.json>`
-   - NS configurations in `<global.output_file_prefix><output_file_postfix>.iter_<iter>.configs.<filename_suffix>>`
+    - NS state in `<general.output_file_prefix><output_file_postfix>.iter_<iter>.state.json>`
+    - NS configurations in `<general.output_file_prefix><output_file_postfix>.iter_<iter>.configs.<filename_suffix>>`
 
 ## Example
 
 Full featured example of a small system with variable cell, semi-grand-canonical run using LAMMPS internal propagators.
+See [here](README_input_parameters.md) for full details.
 ```
-[global]
+[general]
 
     output_filename_prefix = "EAM_LAMMPS_sGC"
     random_seed = 5
@@ -48,7 +51,7 @@ Full featured example of a small system with variable cell, semi-grand-canonical
 
     snapshot_interval = 50000
 
-    [global.step_size_tune]
+    [general.step_size_tune]
 
         interval = 1000
 
