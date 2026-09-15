@@ -1,6 +1,6 @@
 """Pydantic models for ``[configs]`` and ``[configs.walk]`` sections."""
 
-from typing import Annotated, Any, Dict, List, Optional, Union, Literal
+from typing import Annotated, Any, Dict, List, Union, Literal
 
 from ase.units import GPa
 from pydantic import AliasChoices, Field, PositiveInt, model_validator

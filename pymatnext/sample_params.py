@@ -1,6 +1,6 @@
 """Top-level Pydantic model for nested-sampling parameters."""
 
-from typing import Annotated, Any, List
+from typing import Annotated, List
 
 import toml
 from pydantic import Field, PositiveInt, PositiveFloat, NonNegativeInt

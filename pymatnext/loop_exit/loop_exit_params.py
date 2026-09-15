@@ -1,6 +1,6 @@
 """Pydantic model for the ``[ns.exit_conditions]`` section."""
 
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict
 
 from pydantic import Field
 
