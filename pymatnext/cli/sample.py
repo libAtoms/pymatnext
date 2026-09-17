@@ -288,8 +288,8 @@ def sample(args, MPI, NS_comm, walker_comm):
             i_walk = ns.rng_local.integers(0, ns.n_configs_local)
 
         if params_walk_traj_info.interval is not None:
-            if (loop_iter >= params_walk_traj_info.iter_min and
-                (params_walk_traj_info.iter_max < 0 or loop_iter <= params_walk_traj_info.iter_max)):
+            if ((params_walk_traj_info.iter_min is None or loop_iter >= params_walk_traj_info.iter_min) and
+                (params_walk_traj_info.iter_max is None or loop_iter <= params_walk_traj_info.iter_max)):
                 i_walk_global = ns.global_ind(NS_comm.rank, i_walk)
                 walk_traj_info = {"interval": params_walk_traj_info.interval,
                                   "label": f"{output_filename_prefix}.walk_traj.iter_{loop_iter}.ind_{i_walk_global}"}
