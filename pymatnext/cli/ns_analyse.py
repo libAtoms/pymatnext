@@ -293,7 +293,7 @@ def main():
         default_format = (None, '{:8g}')
         formats = {'log_Z' : ('log(Z)', '{:7g}'),
                    'FG' : ('F or G', '{:11g}'),
-                   'U' : ('U', '{:11g}'),
+                   'UH' : ('U or H', '{:11g}'),
                    'Cvp' : ('Cv or Cp', '{:11g}'),
                    'S' : ('S', '{:11g}'),
                    'low_percentile_config' : ('low % i', '{:10d}'),
@@ -309,7 +309,7 @@ def main():
         else:
             extensive_N = None
 
-        extensive_fields = ['log_Z', 'FG', 'U', 'Cvp', 'S', 'V', 'thermal_exp']
+        extensive_fields = ['log_Z', 'FG', 'UH', 'Cvp', 'S', 'V', 'thermal_exp']
         if comm_rank == 0:
             with open(infile + '.analysis', 'w') as outfile:
                 if "pressure" in header:

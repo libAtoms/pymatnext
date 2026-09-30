@@ -74,7 +74,7 @@ def calc_log_Z_terms(beta, log_a, Es, flat_V_prior=False, N_atoms=None, Vs=None)
     log_a: list(float)
         log of log NS factors
     Es: list(float)
-        energies
+        energies or enthalpies
     flat_V_prior: bool, default False
         data came from flat V prior NS, needs to be reweighted by V^N_atoms
     N_atoms: int / list(int), default None
@@ -115,7 +115,7 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     T: float
         temperature
     Es: ndarray(float)
-        energies at each iter
+        energies or enthalpies at each iter
     E_shift: float
         value that was subtracted from Es
     Vs: ndarray(float), optional
@@ -157,15 +157,15 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
 
     Z_term_norm = (Z_term.T / Z_term_sum).T
 
-    U_pot = sum_f(Z_term_norm * Es, axis=1)
+    UH_pot = sum_f(Z_term_norm * Es, axis=1)
 
     if N_atoms is not None:
         N = sum_f(Z_term_norm * N_atoms, axis=1)
 
-    U_extra_DOF = n_extra_DOF / (2.0 * beta)
-    U = U_pot + U_extra_DOF + E_shift
+    UH_extra_DOF = n_extra_DOF / (2.0 * beta)
+    UH = UH_pot + UH_extra_DOF + E_shift
 
-    Cvp = n_extra_DOF * kB / 2.0 + kB * (beta ** 2) * (sum_f(Z_term_norm * Es ** 2, axis=1) - U_pot ** 2)
+    Cvp = n_extra_DOF * kB / 2.0 + kB * (beta ** 2) * (sum_f(Z_term_norm * Es ** 2, axis=1) - UH_pot ** 2)
 
     if Vs is not None:
         V = sum_f(Z_term_norm * Vs, axis=1)
@@ -197,12 +197,12 @@ def analyse_T(T, Es, E_shift, Vs, extra_vals, log_a, flat_V_prior, N_atoms, kB, 
     log_Z += log_f
 
     # also add the E_shift
-    Helmholtz_F = -log_Z / beta + U_extra_DOF + E_shift
+    Helmholtz_F = -log_Z / beta + UH_extra_DOF + E_shift
 
     results_dict = {'log_Z': np.mean(log_Z),
                     'FG': np.mean(Helmholtz_F),
-                    'U': np.mean(U),
-                    'S': np.mean(U - Helmholtz_F) * beta,
+                    'UH': np.mean(UH),
+                    'S': np.mean(UH - Helmholtz_F) * beta,
                     'Cvp': np.mean(Cvp)}
     if N_atoms is not None:
         results_dict['N'] = np.mean(N)

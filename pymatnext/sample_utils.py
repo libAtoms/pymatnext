@@ -54,7 +54,7 @@ def truncate_file_first_col_iter(filename, n_header, sample_interval, max_iter):
 
             line_i = int(line.split()[0])
             if line_i + sample_interval > max_iter:
-                warnings.warn(f"Truncated {filename} at iter {line_i}")
                 cur_pos = fd.tell()
                 fd.truncate(cur_pos)
+                warnings.warn(f"Truncated {filename} at iter {line_i}")
                 break

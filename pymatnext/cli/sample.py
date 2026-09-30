@@ -9,8 +9,9 @@ import pprint
 import itertools
 import json
 import traceback
-
 from argparse import ArgumentParser
+
+from tqdm import tqdm
 
 from pymatnext.ns import NS
 from pymatnext.sample_params import format_sample_defaults, load_sample_params, SampleParams
@@ -152,16 +153,21 @@ def sample(args, MPI, NS_comm, walker_comm):
             # NOTE: should move trajectory truncation into NSConfig, since it's config file-format specific
             # truncate .traj.<suffix> file
             with open(traj_file_name, "r+") as f_configs:
-                while True:
-                    try:
-                        config_i = ns.NSConfig.skip(f_configs)
-                    except EOFError:
-                        raise RuntimeError(f"Failed to find enough lines in .traj{config_suffix} file (last config {config_i}) to reach snapshot iter {ns.snapshot_iter}")
+                warnings.warn(f"Truncating {traj_file_name}")
+                with tqdm(total=ns.snapshot_iter // traj_interval) as pbar:
+                    while True:
+                        try:
+                            config_i = ns.NSConfig.skip(f_configs)
+                        except EOFError:
+                            raise RuntimeError(f"Failed to find enough lines in .traj{config_suffix} file "
+                                               f"(last config {config_i}) to reach snapshot iter {ns.snapshot_iter}")
+                        pbar.update(traj_interval)
 
-                    if config_i + traj_interval > ns.snapshot_iter:
-                        cur_pos = f_configs.tell()
-                        f_configs.truncate(cur_pos)
-                        break
+                        if config_i + traj_interval > ns.snapshot_iter:
+                            cur_pos = f_configs.tell()
+                            f_configs.truncate(cur_pos)
+                            warnings.warn(f"Truncated {traj_file_name} at config {config_i}")
+                            break
 
             ns_file = open(ns_file_name, "a") # noqa: SIM115
             traj_file = open(traj_file_name, "a") # noqa: SIM115
@@ -185,6 +191,7 @@ def sample(args, MPI, NS_comm, walker_comm):
                 clone_history_file = None
 
             traj_file = open(traj_file_name,  "w") # noqa: SIM115
+        warnings.warn(f"Done with start/restart")
     else:
         ns_file = None
         traj_file = None
@@ -214,6 +221,7 @@ def sample(args, MPI, NS_comm, walker_comm):
 
     exit_normal_loop_iterable = True
     time_prev_stdout_report = time.time()
+    warnings.warn(f"Starting main loop")
     for loop_iter in loop_iterable:
         if exit_cond(ns, loop_iter):
             warnings.warn(f"Exiting due to exit conditions {params.ns.exit_conditions.model_dump()}")
